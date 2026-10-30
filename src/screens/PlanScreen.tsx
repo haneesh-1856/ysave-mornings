@@ -1,0 +1,208 @@
+import { router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Keyboard, Platform, Pressable, View } from 'react-native';
+
+import { isDayKey } from '@/domain/dayKey';
+import type { PlanDraft, PlanRow as PlanRowData } from '@/domain/plan';
+import type { DayKey } from '@/domain/types';
+import { setTaskNoteFromPlan } from '@/state/actions/plan';
+import { ValidationError } from '@/state/errors';
+import { usePlanDraft } from '@/state/hooks/usePlanDraft';
+import { usePlannableDays } from '@/state/hooks/usePlannableDays';
+import { usePlanTopics } from '@/state/hooks/usePlanTopics';
+import { useSubmitGuard } from '@/state/hooks/useSubmitGuard';
+import { useTaskNote } from '@/state/hooks/useTaskNote';
+import { useTheme } from '@/theme/ThemeProvider';
+import { Button } from '@/ui/Button';
+import { weekdayName, weekdayPlural } from '@/ui/dayNames';
+import { Header } from '@/ui/Header';
+import { OneOffForm } from '@/ui/OneOffForm';
+import { PlanFooter } from '@/ui/PlanFooter';
+import { PlanRow } from '@/ui/PlanRow';
+import { Screen } from '@/ui/Screen';
+import { T } from '@/ui/T';
+
+const DEBOUNCE_MS = 400;
+const REMOVED_TOPIC = 'Removed topic';
+const NOT_PLANNABLE = 'You can plan today until it closes, or tomorrow.';
+
+/** Android does not lift a ScrollView above the keyboard by itself (iOS does, via Screen), so add the room. */
+function useKeyboardSpace() {
+  const [h, setH] = useState(0);
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const show = Keyboard.addListener('keyboardDidShow', e => setH(e.endCoordinates.height));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setH(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return h;
+}
+
+function BackButton() {
+  return (
+    <View style={{ alignItems: 'flex-start' }}>
+      <Button label="‹ Back" kind="ghost" accessibilityLabel="Back" onPress={() => router.back()} />
+    </View>
+  );
+}
+
+function NotPlannable() {
+  return (
+    <Screen>
+      <BackButton />
+      <Header title="Plan" />
+      <T>{NOT_PLANNABLE}</T>
+    </Screen>
+  );
+}
+
+export function PlanScreen() {
+  const { dayKey } = useLocalSearchParams<{ dayKey: string }>();
+  if (typeof dayKey !== 'string' || !isDayKey(dayKey)) return <NotPlannable />;
+  return <PlanBody dayKey={dayKey as DayKey} />;
+}
+
+function findRow(draft: PlanDraft, key: string | null): PlanRowData | undefined {
+  if (key == null) return undefined;
+  return [...draft.groups.flatMap(g => g.rows), ...draft.notOn].find(r => r.key === key);
+}
+
+function PlanBody({ dayKey }: { dayKey: DayKey }) {
+  const t = useTheme();
+  const { todayKey } = usePlannableDays();
+  const plan = usePlanDraft(dayKey);
+  const guard = useSubmitGuard();
+  const keyboard = useKeyboardSpace();
+  const topics = usePlanTopics();
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [error, setError] = useState<string>();
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  // One hook call for the single expanded row (hooks are never called per row or conditionally).
+  const expandedTaskId = plan.draft ? findRow(plan.draft, expanded)?.taskId ?? null : null;
+  const libraryNote = useTaskNote(expandedTaskId);
+
+  // Debounced note saving: edits go to the library task (rows with a taskId only); flushed on collapse and unmount.
+  const pending = useRef<Record<string, { taskId: string; text: string }>>({});
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flush = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    const p = pending.current;
+    pending.current = {};
+    for (const { taskId, text } of Object.values(p)) setTaskNoteFromPlan(taskId, text);
+  }, []);
+  useEffect(() => flush, [flush]);
+
+  if (!plan.plannable || !plan.draft) return <NotPlannable />;
+  const draft = plan.draft;
+  const topicById = new Map(topics.map(x => [x.id, x]));
+  const name = weekdayName(dayKey);
+  const title = dayKey === todayKey ? 'Plan today' : `Plan ${name}`;
+
+  const toggleExpand = (key: string) => {
+    flush(); // collapsing (or switching rows) saves what is pending
+    setExpanded(cur => (cur === key ? null : key));
+  };
+  // Only rows with a library task show the note (noteEditable), and only the expanded row's note is read.
+  const noteOf = (row: PlanRowData): string => notes[row.key] ?? libraryNote;
+  const onNote = (row: PlanRowData, text: string) => {
+    if (!row.taskId) return; // not reachable: the field is hidden for one-offs
+    setNotes(n => ({ ...n, [row.key]: text }));
+    pending.current[row.key] = { taskId: row.taskId, text };
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(flush, DEBOUNCE_MS);
+  };
+
+  const renderRow = (row: PlanRowData) => (
+    <PlanRow
+      key={row.key}
+      row={row}
+      dayKey={dayKey}
+      topicName={topicById.get(row.topicId)?.name ?? REMOVED_TOPIC}
+      expanded={expanded === row.key}
+      onToggleTick={() => plan.toggle(row.key)}
+      onToggleExpand={() => toggleExpand(row.key)}
+      onStep={d => plan.step(row.key, d)}
+      onCue={v => plan.setCue(row.key, v)}
+      onTreat={v => plan.setTreat(row.key, v)}
+      note={expanded === row.key && row.taskId != null ? noteOf(row) : ''}
+      noteEditable={row.taskId != null}
+      onNote={text => onNote(row, text)}
+    />
+  );
+
+  const confirm = () => {
+    try {
+      guard.run(() => {
+        flush();
+        plan.confirm();
+        router.replace({ pathname: '/planned/[dayKey]', params: { dayKey } });
+      });
+    } catch (e) {
+      if (!(e instanceof ValidationError)) throw e;
+      setError(e.message);
+    }
+  };
+
+  return (
+    <Screen
+      footer={
+        <>
+          {error ? <T accessibilityRole="alert" weight="bold">{error}</T> : null}
+          <PlanFooter
+            count={plan.totals.count}
+            minutes={plan.totals.minutes}
+            dayName={name}
+            canConfirm={plan.canConfirm}
+            busy={guard.busy}
+            onConfirm={confirm}
+          />
+        </>
+      }>
+      <BackButton />
+      <Header title={title} />
+      {draft.groups.map(g => {
+        const topic = topicById.get(g.topicId);
+        if (g.rows.length === 0) return null;
+        const tone = t.topic(topic?.colorKey ?? g.rows[0].colorKey);
+        return (
+          <View key={g.topicId} style={{ gap: 8 }}>
+            <View style={{ borderRadius: t.radius.r, backgroundColor: tone.fold, paddingHorizontal: 12, paddingVertical: 8 }}>
+              <T weight="bold" accessibilityRole="header">{topic?.name ?? REMOVED_TOPIC}</T>
+            </View>
+            {g.rows.map(renderRow)}
+          </View>
+        );
+      })}
+      {draft.notOn.length > 0 ? (
+        <View style={{ gap: 8 }}>
+          <T variant="label" accessibilityRole="header">{`Not on ${weekdayPlural(dayKey)} · tap to add once`}</T>
+          {draft.notOn.map(renderRow)}
+        </View>
+      ) : null}
+      {adding ? (
+        <OneOffForm
+          topics={topics.map(x => ({ id: x.id, name: x.name, colorKey: x.colorKey }))}
+          onAdd={row => {
+            plan.addOneOff(row);
+            setAdding(false);
+          }}
+          onCancel={() => setAdding(false)}
+        />
+      ) : (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Add a one-off task"
+          onPress={() => setAdding(true)}
+          style={{ minHeight: 48, justifyContent: 'center' }}>
+          <T weight="bold">+ Add a one-off task</T>
+        </Pressable>
+      )}
+      {keyboard > 0 ? <View style={{ height: keyboard }} /> : null}
+    </Screen>
+  );
+}

@@ -1,0 +1,206 @@
+import { act, fireEvent, screen } from '@testing-library/react-native';
+
+import { getDay, loadDayBundle } from '@/data/repos/days';
+import { applyOps } from '@/data/repos/ops';
+import { getTask } from '@/data/repos/tasks';
+import { createTask, createTopic, setTaskNote } from '@/state/actions/library';
+import { getDb } from '@/state/dbRef';
+import { setupState, teardownState } from '@/state/testSupport';
+import { renderThemed } from '@/ui/testing';
+
+import { PlanScreen } from '../PlanScreen';
+
+let mockN = 0;
+jest.mock('@/state/ids', () => ({ newId: () => `id-${++mockN}` }));
+const mockReplace = jest.fn();
+const mockBack = jest.fn();
+let mockParam = '2026-10-30';
+jest.mock('expo-router', () => ({
+  router: { replace: (...a: unknown[]) => mockReplace(...a), back: () => mockBack() },
+  useLocalSearchParams: () => ({ dayKey: mockParam }),
+}));
+jest.mock('@/ui/useMotion', () => ({ useMotion: () => ({ reduce: true, animate: (to: number) => to }) }));
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
+
+const AT = Date.UTC(2026, 9, 29, 12, 0, 0); // Thursday 29 Oct; tomorrow is Friday 30 Oct
+const ALL_DAYS = 0b1111111;
+const MON_ONLY = 0b0000001; // not on Fridays
+const MESSAGE = 'You can plan today until it closes, or tomorrow.';
+
+function seed() {
+  const study = createTopic({ name: 'Study', colorKey: 'study' });
+  const read = createTask(study.id, { name: 'Read', minutes: 45, repeatMask: ALL_DAYS, isDefault: true });
+  createTask(study.id, { name: 'Notes', kind: 'check', repeatMask: ALL_DAYS, isDefault: true });
+  createTask(study.id, { name: 'Long run', minutes: 30, repeatMask: MON_ONLY });
+  return { study, read };
+}
+
+beforeEach(() => {
+  setupState(AT);
+  mockParam = '2026-10-30';
+  mockReplace.mockClear();
+  mockBack.mockClear();
+});
+afterEach(teardownState);
+
+describe('PlanScreen', () => {
+  it('shows tomorrow with defaults ticked, topic header and the Not on group', async () => {
+    seed();
+    await renderThemed(<PlanScreen />);
+    expect(screen.getByText('Plan Friday')).toBeTruthy();
+    expect(screen.getByText('Study')).toBeTruthy();
+    expect(screen.getByRole('checkbox', { name: 'Include Read' }).props.accessibilityState.checked).toBe(true);
+    expect(screen.getByRole('checkbox', { name: 'Include Long run' }).props.accessibilityState.checked).toBe(false);
+    expect(screen.getByText('Not on Fridays · tap to add once')).toBeTruthy();
+    expect(screen.getByText('2 tasks · 45m planned')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Friday looks like this ✓' })).toBeTruthy();
+  });
+
+  it('ticking and unticking changes the footer', async () => {
+    seed();
+    await renderThemed(<PlanScreen />);
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Include Long run' }));
+    expect(screen.getByText('3 tasks · 1h 15m planned')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('checkbox', { name: 'Include Read' }));
+    expect(screen.getByText('2 tasks · 30m planned')).toBeTruthy();
+  });
+
+  it('adds a one-off task', async () => {
+    seed();
+    await renderThemed(<PlanScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Add a one-off task' }));
+    await fireEvent.changeText(screen.getByLabelText('Task name'), 'Dentist call');
+    await fireEvent.press(screen.getByRole('radio', { name: 'Study' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Add' }));
+    expect(screen.getByText('Dentist call')).toBeTruthy();
+    expect(screen.getByText('just for Friday')).toBeTruthy();
+    expect(screen.getByText('3 tasks · 1h 15m planned')).toBeTruthy();
+  });
+
+  it('confirm writes the plan and replaces once, even on a double tap', async () => {
+    seed();
+    await renderThemed(<PlanScreen />);
+    const confirm = screen.getByRole('button', { name: 'Friday looks like this ✓' });
+    await fireEvent.press(confirm);
+    await fireEvent.press(confirm);
+    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(mockReplace).toHaveBeenCalledWith({ pathname: '/planned/[dayKey]', params: { dayKey: '2026-10-30' } });
+    expect(getDay(getDb(), '2026-10-30')?.planConfirmedAt).not.toBeNull();
+    expect(loadDayBundle(getDb(), '2026-10-30')?.dayTasks.map(d => d.name).sort()).toEqual(['Notes', 'Read']);
+    // the screen still shows the plan (frozen draft), not the not-plannable message
+    expect(screen.getByText('Plan Friday')).toBeTruthy();
+  });
+
+  it('shows the message and Back for a day that cannot be planned', async () => {
+    seed();
+    mockParam = '2026-10-28'; // yesterday
+    await renderThemed(<PlanScreen />);
+    expect(screen.getByText(MESSAGE)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the message for a closed today', async () => {
+    seed();
+    applyOps(
+      getDb(),
+      {
+        closeSessions: [], completions: [], outcomes: [], insertDayTasks: [], closeDays: [],
+        createDays: [{ dayKey: '2026-10-29', planConfirmedAt: null, closedAt: 1, closedBy: 'user', dayStartHour: 4 }],
+      },
+      () => 'x',
+      1,
+    );
+    mockParam = '2026-10-29';
+    await renderThemed(<PlanScreen />);
+    expect(screen.getByText(MESSAGE)).toBeTruthy();
+  });
+
+  it('shows the message for a malformed param', async () => {
+    mockParam = 'not-a-day';
+    await renderThemed(<PlanScreen />);
+    expect(screen.getByText(MESSAGE)).toBeTruthy();
+  });
+
+  it('titles today "Plan today" when today has no plan', async () => {
+    seed();
+    mockParam = '2026-10-29';
+    await renderThemed(<PlanScreen />);
+    expect(screen.getByText('Plan today')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Thursday looks like this ✓' })).toBeTruthy();
+  });
+
+  it('re-opens a confirmed today for editing (ADR-009): rows load saved, Confirm keeps planConfirmedAt', async () => {
+    seed();
+    mockParam = '2026-10-29';
+    await renderThemed(<PlanScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Thursday looks like this ✓' }));
+    const first = getDay(getDb(), '2026-10-29')!.planConfirmedAt;
+    expect(first).not.toBeNull();
+    await act(async () => {
+      screen.unmount();
+    });
+    mockReplace.mockClear();
+    await renderThemed(<PlanScreen />);
+    expect(screen.getByText('Plan today')).toBeTruthy();
+    expect(screen.queryByText(MESSAGE)).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Thursday looks like this ✓' }));
+    expect(mockReplace).toHaveBeenCalledWith({ pathname: '/planned/[dayKey]', params: { dayKey: '2026-10-29' } });
+    expect(getDay(getDb(), '2026-10-29')!.planConfirmedAt).toBe(first);
+  });
+
+  it('saves a note to the library task after the debounce', async () => {
+    const { read } = seed();
+    jest.useFakeTimers();
+    try {
+      await renderThemed(<PlanScreen />);
+      await fireEvent.press(screen.getByRole('button', { name: 'Edit Read for Friday' }));
+      await fireEvent.changeText(screen.getByLabelText('Note'), 'chapter 3');
+      expect(getTask(getDb(), read.id)?.note).toBe('');
+      await act(async () => {
+        jest.advanceTimersByTime(450);
+      });
+      expect(getTask(getDb(), read.id)?.note).toBe('chapter 3');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a one-off row has no Note field', async () => {
+    seed();
+    await renderThemed(<PlanScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Add a one-off task' }));
+    await fireEvent.changeText(screen.getByLabelText('Task name'), 'Dentist call');
+    await fireEvent.press(screen.getByRole('radio', { name: 'Study' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Add' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Edit Dentist call for Friday' }));
+    expect(screen.getByLabelText('After class')).toBeTruthy(); // the row really is expanded
+    expect(screen.queryByLabelText('Note')).toBeNull();
+  });
+
+  it('shows the library note when a row expands and a new topic appears live', async () => {
+    const { read } = seed();
+    setTaskNote(read.id, 'ch 2');
+    await renderThemed(<PlanScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Edit Read for Friday' }));
+    expect(screen.getByLabelText('Note').props.value).toBe('ch 2');
+    await fireEvent.press(screen.getByRole('button', { name: 'Add a one-off task' }));
+    expect(screen.queryByRole('radio', { name: 'Home' })).toBeNull();
+    await act(async () => {
+      createTopic({ name: 'Home', colorKey: 'home' });
+    });
+    expect(screen.getByRole('radio', { name: 'Home' })).toBeTruthy();
+  });
+
+  it('flushes a pending note when the row collapses', async () => {
+    const { read } = seed();
+    await renderThemed(<PlanScreen />);
+    const edit = screen.getByRole('button', { name: 'Edit Read for Friday' });
+    await fireEvent.press(edit);
+    await fireEvent.changeText(screen.getByLabelText('Note'), 'quick');
+    await fireEvent.press(edit);
+    expect(getTask(getDb(), read.id)?.note).toBe('quick');
+  });
+});

@@ -1,0 +1,475 @@
+import {
+  addOneOff, buildPlan, canConfirm, confirmPlan, plannableDays, prefillUnplanned,
+  setCue, setTicked, setTreat, stepMinutes,
+} from '../plan';
+import type { PlanDraft, PlanRow } from '../plan';
+import type { Day, DayTask, Session, Task, Topic } from '../types';
+
+const THU = '2026-10-29'; // Thursday = bit 3
+const MON_BIT = 1, THU_BIT = 8, FRI_BIT = 16;
+
+const topic = (id: string, sortOrder: number, extra: Partial<Topic> = {}): Topic => ({
+  id, name: id, colorKey: 'study', sortOrder, isOpen: true, deletedAt: null, ...extra,
+});
+const task = (id: string, topicId: string, sortOrder: number, extra: Partial<Task> = {}): Task => ({
+  id, topicId, name: id, kind: 'timed', minutes: 30, repeatMask: THU_BIT, isDefault: true,
+  cue: null, treat: null, note: '', sortOrder, deletedAt: null, ...extra,
+});
+const dayTask = (id: string, extra: Partial<DayTask> = {}): DayTask => ({
+  id, dayKey: THU, taskId: null, topicId: 'A', name: id, colorKey: 'study', kind: 'timed',
+  budgetSec: 1800, cue: null, treat: null, forwardedFromDayKey: null, completedAt: null,
+  closeOutcome: null, sortOrder: 0, ...extra,
+});
+const day = (planConfirmedAt: number | null): Day => ({
+  dayKey: THU, planConfirmedAt, closedAt: null, closedBy: null, dayStartHour: 4,
+});
+
+const topics = [topic('B', 2, { colorKey: 'health' }), topic('A', 1)];
+const rowsOf = (d: PlanDraft): PlanRow[] => [...d.groups.flatMap((g) => g.rows), ...d.notOn];
+const find = (d: PlanDraft, key: string): PlanRow => rowsOf(d).find((r) => r.key === key)!;
+const build = (tasks: Task[], dayV: Day | null = null, dayTasks: DayTask[] = [], tps = topics) =>
+  buildPlan({ dayKey: THU, topics: tps, tasks, day: dayV, dayTasks });
+
+describe('buildPlan, no confirmed plan (doc 04 §2 table)', () => {
+  const tasks = [
+    task('def', 'A', 1),
+    task('rep', 'A', 2, { isDefault: false }),
+    task('off', 'A', 3, { repeatMask: MON_BIT }),
+  ];
+
+  it('default / repeats / not on day', () => {
+    const d = build(tasks);
+    expect(find(d, 'def')).toMatchObject({ ticked: true, reason: 'default', dayTaskId: null, taskId: 'def' });
+    expect(find(d, 'rep')).toMatchObject({ ticked: false, reason: 'repeats' });
+    expect(find(d, 'off')).toMatchObject({ ticked: false, reason: 'not_on_day' });
+    expect(d.groups).toHaveLength(1);
+    expect(d.groups[0].rows.map((r) => r.key)).toEqual(['def', 'rep']);
+    expect(d.notOn.map((r) => r.key)).toEqual(['off']);
+  });
+
+  it('treats a day row with planConfirmedAt null like no plan; a prefilled row attaches to its library row', () => {
+    const d = build(tasks, day(null), [dayTask('x', { taskId: 'def' })]);
+    expect(find(d, 'def')).toMatchObject({ reason: 'default', ticked: true, dayTaskId: 'x' });
+    expect(rowsOf(d).some((r) => r.key === 'x')).toBe(false);
+  });
+
+  it('forwarded rows land in their topic group, ticked, and replace the same library task', () => {
+    const fw = dayTask('fw', { taskId: 'rep', topicId: 'A', forwardedFromDayKey: '2026-10-28', kind: 'check', budgetSec: 0 });
+    const d = build(tasks, day(null), [fw]);
+    expect(find(d, 'fw')).toMatchObject({
+      ticked: true, reason: 'forwarded', dayTaskId: 'fw', forwardedFromDayKey: '2026-10-28', minutes: 30,
+    });
+    expect(rowsOf(d).filter((r) => r.taskId === 'rep')).toHaveLength(1);
+    expect(d.groups[0].rows.map((r) => r.key)).toEqual(['def', 'fw']);
+  });
+
+  it('rows take minutes/cue/treat/color from the task and topic', () => {
+    const d = build([task('t', 'B', 1, { minutes: 45, cue: 'c', treat: 'tr' })]);
+    expect(find(d, 't')).toMatchObject({ minutes: 45, cue: 'c', treat: 'tr', colorKey: 'health', kind: 'timed' });
+  });
+});
+
+describe('buildPlan + confirmPlan, prefilled rows on an unconfirmed day (doc 04 §3, check error 1)', () => {
+  const tasks = [
+    task('t', 'A', 1, { cue: 'libcue' }),
+    task('r', 'A', 2, { isDefault: false }),
+    task('off', 'A', 3, { repeatMask: MON_BIT }),
+    task('chk', 'B', 1, { kind: 'check', minutes: 20 }),
+  ];
+  const sessions: Session[] = [{ id: 's1', dayTaskId: 'p', startedAt: 1, endedAt: 2 }];
+
+  it('attached rows keep library key/reason/position with the day row values', () => {
+    const dts = [
+      dayTask('p', { taskId: 't', budgetSec: 2700, cue: 'daycue', treat: 'daytreat', sortOrder: 9 }),
+      dayTask('pr', { taskId: 'r', sortOrder: 1 }),
+      dayTask('po', { taskId: 'off', sortOrder: 2 }),
+      dayTask('pc', { taskId: 'chk', topicId: 'B', kind: 'check', budgetSec: 0, sortOrder: 3 }),
+    ];
+    const d = build(tasks, day(null), dts);
+    expect(find(d, 't')).toMatchObject({
+      dayTaskId: 'p', ticked: true, reason: 'default', minutes: 45, cue: 'daycue', treat: 'daytreat', taskId: 't',
+    });
+    expect(find(d, 'r')).toMatchObject({ dayTaskId: 'pr', ticked: true, reason: 'repeats' });
+    expect(find(d, 'off')).toMatchObject({ dayTaskId: 'po', ticked: true, reason: 'not_on_day' });
+    expect(find(d, 'chk')).toMatchObject({ dayTaskId: 'pc', minutes: 20, kind: 'check' });
+    expect(d.groups.map((g) => g.rows.map((r) => r.key))).toEqual([['t', 'r'], ['chk']]);
+    expect(d.notOn.map((r) => r.key)).toEqual(['off']);
+  });
+
+  it('a prefilled row of a deleted task (or with no task) becomes a ticked saved row', () => {
+    const ts = [task('gone', 'A', 1, { deletedAt: 5 })];
+    const dts = [dayTask('pg', { taskId: 'gone' }), dayTask('one', { taskId: null, sortOrder: 1 })];
+    const d = build(ts, day(null), dts);
+    expect(rowsOf(d).map((r) => [r.key, r.reason, r.ticked, r.dayTaskId])).toEqual([
+      ['pg', 'saved', true, 'pg'], ['one', 'saved', true, 'one'],
+    ]);
+  });
+
+  it('(1) prefilled row WITH a session: no insert for that taskId, an update instead', () => {
+    const p = dayTask('p', { taskId: 't', sortOrder: 4 });
+    const d = build(tasks, day(null), [p]);
+    expect(find(d, 't').dayTaskId).toBe('p');
+    const out = confirmPlan(d, [p], sessions);
+    expect(out.insert.some((r) => r.taskId === 't')).toBe(false);
+    expect(out.update).toEqual([{ ...p, budgetSec: 1800, cue: null, treat: null, sortOrder: 0 }]);
+    expect(out.deleteIds).toEqual([]);
+    expect(out.insert.map((r) => r.taskId)).toEqual(['chk']);
+  });
+
+  it('(2) prefilled row without progress: update, not delete + insert', () => {
+    const p = dayTask('p', { taskId: 't', budgetSec: 2400 });
+    const d = stepMinutes(build(tasks, day(null), [p]), 't', 5);
+    const out = confirmPlan(d, [p], []);
+    expect(out.update).toEqual([{ ...p, budgetSec: 45 * 60, sortOrder: 0 }]);
+    expect(out.deleteIds).toEqual([]);
+    expect(out.insert.some((r) => r.taskId === 't')).toBe(false);
+  });
+
+  it('(3) unticking a prefilled row without progress deletes it, with no insert', () => {
+    const p = dayTask('p', { taskId: 't' });
+    const d = setTicked(build(tasks, day(null), [p]), 't', false);
+    const out = confirmPlan(d, [p], []);
+    expect(out.deleteIds).toEqual(['p']);
+    expect(out.update).toEqual([]);
+    expect(out.insert.some((r) => r.taskId === 't')).toBe(false);
+  });
+
+  it('unticking a prefilled row WITH a session keeps it untouched', () => {
+    const p = dayTask('p', { taskId: 't' });
+    const out = confirmPlan(setTicked(build(tasks, day(null), [p]), 't', false), [p], sessions);
+    expect(out).toEqual({ insert: [expect.objectContaining({ taskId: 'chk' })], update: [], deleteIds: [] });
+  });
+});
+
+describe('library filtering and ordering', () => {
+  it('drops deleted and blank-named tasks and tasks of unknown topics; orders by sortOrder', () => {
+    const tasks = [
+      task('b2', 'B', 2), task('b1', 'B', 1), task('a1', 'A', 1),
+      task('gone', 'A', 2, { deletedAt: 1 }), task('blank', 'A', 3, { name: '   ' }),
+      task('orph', 'Z', 1),
+    ];
+    const d = build(tasks);
+    expect(d.groups.map((g) => g.topicId)).toEqual(['A', 'B']);
+    expect(d.groups[1].rows.map((r) => r.key)).toEqual(['b1', 'b2']);
+    expect(rowsOf(d).map((r) => r.key).sort()).toEqual(['a1', 'b1', 'b2']);
+  });
+
+  it('omits topics with no rows and deleted topics', () => {
+    const d = build([task('b1', 'B', 1), task('c1', 'C', 1)], null, [], [topic('A', 1), topic('B', 2), topic('C', 0, { deletedAt: 5 })]);
+    expect(d.groups.map((g) => g.topicId)).toEqual(['B']);
+  });
+
+  it('notOn is ordered by topic then task', () => {
+    const d = build([
+      task('b', 'B', 1, { repeatMask: MON_BIT }), task('a2', 'A', 2, { repeatMask: MON_BIT }),
+      task('a1', 'A', 1, { repeatMask: MON_BIT }),
+    ]);
+    expect(d.notOn.map((r) => r.key)).toEqual(['a1', 'a2', 'b']);
+  });
+
+  it('weekday mapping uses repeatMask for the target dayKey', () => {
+    const t = task('f', 'A', 1, { repeatMask: FRI_BIT });
+    expect(buildPlan({ dayKey: '2026-10-30', topics, tasks: [t], day: null, dayTasks: [] }).groups[0].rows[0].reason).toBe('default');
+    expect(buildPlan({ dayKey: THU, topics, tasks: [t], day: null, dayTasks: [] }).notOn).toHaveLength(1);
+    const sun = task('s', 'A', 1, { repeatMask: 64 });
+    expect(buildPlan({ dayKey: '2026-11-01', topics, tasks: [sun], day: null, dayTasks: [] }).groups).toHaveLength(1);
+  });
+});
+
+describe('buildPlan, confirmed plan', () => {
+  const tasks = [
+    task('t1', 'A', 1), task('t2', 'A', 2, { isDefault: false }), task('t3', 'A', 3, { repeatMask: MON_BIT }),
+    task('t4', 'A', 4),
+  ];
+
+  it('saved rows are ticked with per-day values; the rest appear unticked', () => {
+    const dts = [
+      dayTask('d1', { taskId: 't1', budgetSec: 2700, cue: 'cue', treat: 'tr', sortOrder: 0 }),
+      dayTask('d2', { topicId: 'B', colorKey: 'health', name: 'once', sortOrder: 1 }),
+      dayTask('d3', { taskId: 't4', kind: 'check', budgetSec: 0 }),
+    ];
+    const d = build(tasks, day(100), dts);
+    expect(find(d, 'd1')).toMatchObject({ ticked: true, reason: 'saved', minutes: 45, cue: 'cue', treat: 'tr', dayTaskId: 'd1', taskId: 't1' });
+    expect(find(d, 'd2')).toMatchObject({ ticked: true, reason: 'saved', taskId: null, topicId: 'B' });
+    expect(find(d, 'd3')).toMatchObject({ ticked: true, minutes: 30, kind: 'check' });
+    expect(find(d, 't2')).toMatchObject({ ticked: false, reason: 'repeats', dayTaskId: null });
+    expect(find(d, 't3')).toMatchObject({ ticked: false, reason: 'not_on_day' });
+    expect(rowsOf(d).some((r) => r.key === 't1' || r.key === 't4')).toBe(false);
+    expect(d.notOn.map((r) => r.key)).toEqual(['t3']);
+  });
+
+  it('an unticked default stays unticked and keeps the default reason', () => {
+    const d = build(tasks, day(100), [dayTask('d2', { taskId: 't2' })]);
+    expect(find(d, 't1')).toMatchObject({ ticked: false, reason: 'default' });
+  });
+
+  it('forwarded rows keep their reason; one-offs after library rows; check minutes fall back to 15', () => {
+    const dts = [
+      dayTask('f', { forwardedFromDayKey: '2026-10-28', kind: 'check', budgetSec: 0, sortOrder: 0 }),
+      dayTask('o', { sortOrder: 1 }),
+      dayTask('l', { taskId: 't2', sortOrder: 2 }),
+    ];
+    const d = build(tasks, day(100), dts);
+    expect(find(d, 'f')).toMatchObject({ reason: 'forwarded', minutes: 15 });
+    expect(d.groups[0].rows.map((r) => r.key)).toEqual(['t1', 'l', 't4', 'f', 'o']);
+  });
+
+  it('a deleted task whose day row exists stays as a saved row; a deleted task without a row does not', () => {
+    const ts = [task('t1', 'A', 1, { deletedAt: 9 }), task('t2', 'A', 2, { deletedAt: 9 })];
+    const d = build(ts, day(100), [dayTask('d1', { taskId: 't1' })]);
+    expect(rowsOf(d).map((r) => r.key)).toEqual(['d1']);
+    expect(find(d, 'd1').reason).toBe('saved');
+  });
+
+  it('a deleted task referenced only by a forwarded row keeps that row', () => {
+    const ts = [task('t1', 'A', 1, { deletedAt: 9 })];
+    const d = build(ts, null, [dayTask('f', { taskId: 't1', forwardedFromDayKey: '2026-10-28' })]);
+    expect(rowsOf(d).map((r) => r.key)).toEqual(['f']);
+  });
+
+  it('topics referenced only by dayTasks (deleted or unknown) get groups at the end, in order', () => {
+    const tps = [topic('A', 1), topic('X', 2, { deletedAt: 3 })];
+    const dts = [
+      dayTask('x1', { topicId: 'X', sortOrder: 0 }),
+      dayTask('a1', { topicId: 'A', sortOrder: 1 }),
+      dayTask('q', { topicId: 'Q', sortOrder: 2 }),
+    ];
+    const d = build([], day(1), dts, tps);
+    expect(d.groups.map((g) => g.topicId)).toEqual(['A', 'X', 'Q']);
+  });
+
+  it('clamps odd saved budgets', () => {
+    const d = build([], day(1), [dayTask('big', { budgetSec: 99999 * 60 }), dayTask('small', { budgetSec: 60 })]);
+    expect(find(d, 'big').minutes).toBe(180);
+    expect(find(d, 'small').minutes).toBe(5);
+  });
+});
+
+describe('editors', () => {
+  const base = build([task('t', 'A', 1), task('off', 'A', 2, { repeatMask: MON_BIT })]);
+
+  it('are immutable and edit one row', () => {
+    const snap = JSON.stringify(base);
+    const d = setCue(setTreat(setTicked(base, 't', false), 't', 'tea'), 't', 'after coffee');
+    expect(JSON.stringify(base)).toBe(snap);
+    expect(find(d, 't')).toMatchObject({ ticked: false, treat: 'tea', cue: 'after coffee' });
+    expect(find(setCue(d, 't', null), 't').cue).toBeNull();
+  });
+
+  it('unknown key returns the same draft', () => {
+    expect(setTicked(base, 'nope', true)).toBe(base);
+    expect(stepMinutes(base, 'nope', 5)).toBe(base);
+    expect(setCue(base, 'nope', 'x')).toBe(base);
+    expect(setTreat(base, 'nope', 'x')).toBe(base);
+  });
+
+  it('ticking a notOn row keeps it in notOn', () => {
+    const d = setTicked(base, 'off', true);
+    expect(d.notOn[0]).toMatchObject({ key: 'off', ticked: true });
+    expect(d.groups[0].rows.map((r) => r.key)).toEqual(['t']);
+  });
+
+  it('stepMinutes steps and clamps to 5..180', () => {
+    expect(find(stepMinutes(base, 't', 5), 't').minutes).toBe(35);
+    expect(find(stepMinutes(base, 't', -5), 't').minutes).toBe(25);
+    let d = base;
+    for (let i = 0; i < 40; i++) d = stepMinutes(d, 't', 5);
+    expect(find(d, 't').minutes).toBe(180);
+    for (let i = 0; i < 60; i++) d = stepMinutes(d, 't', -5);
+    expect(find(d, 't').minutes).toBe(5);
+    expect(find(stepMinutes(base, 'off', -5), 'off').minutes).toBe(25);
+  });
+});
+
+describe('addOneOff', () => {
+  const base = build([task('t', 'A', 1)]);
+  const spec = { topicId: 'A', name: ' Call bank ', colorKey: 'study' as const, kind: 'check' as const, minutes: 15 };
+
+  it('adds a ticked one_off row to the topic group with unique keys', () => {
+    const d1 = addOneOff(base, spec);
+    const d2 = addOneOff(d1, { ...spec, name: 'Second' });
+    expect(d2.groups[0].rows.map((r) => r.key)).toEqual(['t', 'oneoff:1', 'oneoff:2']);
+    expect(find(d2, 'oneoff:1')).toMatchObject({
+      name: 'Call bank', ticked: true, reason: 'one_off', taskId: null, dayTaskId: null, forwardedFromDayKey: null, kind: 'check',
+    });
+    expect(base.groups[0].rows).toHaveLength(1);
+  });
+
+  it('creates a group for a topic with no rows yet, and clamps minutes', () => {
+    const d = addOneOff(base, { ...spec, topicId: 'B', kind: 'timed', minutes: 500 });
+    expect(d.groups.map((g) => g.topicId)).toEqual(['A', 'B']);
+    expect(find(d, 'oneoff:1').minutes).toBe(180);
+    expect(find(addOneOff(base, { ...spec, minutes: 1 }), 'oneoff:1').minutes).toBe(5);
+  });
+
+  it('leaves other groups untouched', () => {
+    const two = build([task('t', 'A', 1), task('u', 'B', 1)]);
+    const d = addOneOff(two, spec);
+    expect(d.groups[1]).toBe(two.groups[1]);
+    expect(d.groups[0].rows).toHaveLength(2);
+  });
+
+  it('ignores blank names', () => {
+    expect(addOneOff(base, { ...spec, name: '  ' })).toBe(base);
+  });
+
+  it('numbers after the highest existing key', () => {
+    const d = addOneOff(base, spec);
+    const renamed: PlanDraft = {
+      ...d,
+      groups: [{ ...d.groups[0], rows: d.groups[0].rows.map((r) => (r.key === 'oneoff:1' ? { ...r, key: 'oneoff:7' } : r)) }],
+    };
+    expect(addOneOff(renamed, spec).groups[0].rows.at(-1)!.key).toBe('oneoff:8');
+  });
+});
+
+describe('canConfirm', () => {
+  it('needs at least one ticked row', () => {
+    const d = build([task('t', 'A', 1, { isDefault: false }), task('off', 'A', 2, { repeatMask: MON_BIT })]);
+    expect(canConfirm(d)).toBe(false);
+    expect(canConfirm(setTicked(d, 'off', true))).toBe(true);
+    expect(canConfirm({ dayKey: THU, groups: [], notOn: [] })).toBe(false);
+  });
+});
+
+describe('confirmPlan', () => {
+  it('inserts ticked new rows as snapshots with sortOrder = overall position', () => {
+    const tasks = [
+      task('a', 'A', 1), task('b', 'A', 2, { isDefault: false }),
+      task('c', 'B', 1, { kind: 'check', minutes: 20, cue: 'q', treat: 'r' }),
+    ];
+    const out = confirmPlan(build(tasks), [], []);
+    expect(out.update).toEqual([]);
+    expect(out.deleteIds).toEqual([]);
+    expect(out.insert).toEqual([
+      { dayKey: THU, taskId: 'a', topicId: 'A', name: 'a', colorKey: 'study', kind: 'timed', budgetSec: 1800, cue: null, treat: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null, sortOrder: 0 },
+      { dayKey: THU, taskId: 'c', topicId: 'B', name: 'c', colorKey: 'health', kind: 'check', budgetSec: 0, cue: 'q', treat: 'r', forwardedFromDayKey: null, completedAt: null, closeOutcome: null, sortOrder: 2 },
+    ]);
+  });
+
+  it('updates ticked existing rows (keeping other fields), deletes unticked ones', () => {
+    const dts = [
+      dayTask('d1', { taskId: 't1', sortOrder: 5 }),
+      dayTask('d2', { taskId: 't2', sortOrder: 6 }),
+      dayTask('gone', { taskId: null, sortOrder: 7 }),
+    ];
+    let d = build([task('t1', 'A', 1), task('t2', 'A', 2)], day(1), dts);
+    d = stepMinutes(setCue(d, 'd1', 'new'), 'd1', 5);
+    d = setTicked(d, 'd2', false);
+    d = setTicked(d, 'gone', false);
+    const out = confirmPlan(d, dts, []);
+    expect(out.update).toEqual([{ ...dts[0], budgetSec: 35 * 60, cue: 'new', sortOrder: 0 }]);
+    expect(out.deleteIds.sort()).toEqual(['d2', 'gone']);
+    expect(out.insert).toEqual([]);
+  });
+
+  it('check rows get budgetSec 0 even though they keep minutes', () => {
+    const dts = [dayTask('c', { kind: 'check', budgetSec: 0 })];
+    const d = build([], day(1), dts);
+    expect(find(d, 'c').minutes).toBe(15);
+    expect(confirmPlan(d, dts, []).update[0].budgetSec).toBe(0);
+  });
+
+  it('keeps unticked rows that have a session or completedAt (no delete, no update)', () => {
+    const dts = [dayTask('s', { sortOrder: 0 }), dayTask('c', { completedAt: 5, sortOrder: 1 }), dayTask('n', { sortOrder: 2 })];
+    const sessions: Session[] = [{ id: 'x', dayTaskId: 's', startedAt: 1, endedAt: 2 }];
+    let d = build([], day(1), dts);
+    for (const k of ['s', 'c', 'n']) d = setTicked(d, k, false);
+    d = addOneOff(d, { topicId: 'A', name: 'new', colorKey: 'study', kind: 'timed', minutes: 10 });
+    const out = confirmPlan(d, dts, sessions);
+    expect(out.deleteIds).toEqual(['n']);
+    expect(out.update).toEqual([]);
+    expect(out.insert).toHaveLength(1);
+    expect(out.insert[0].sortOrder).toBe(3);
+  });
+
+  it('a ticked row with progress is still updated', () => {
+    const dts = [dayTask('s')];
+    const d = stepMinutes(build([], day(1), dts), 's', -5);
+    const out = confirmPlan(d, dts, [{ id: 'x', dayTaskId: 's', startedAt: 1, endedAt: null }]);
+    expect(out.update[0].budgetSec).toBe(25 * 60);
+    expect(out.deleteIds).toEqual([]);
+  });
+
+  it('(4) guard: an insert whose taskId exists in `existing` becomes an update; duplicates are dropped', () => {
+    const p = dayTask('p', { taskId: 't', completedAt: 7, sortOrder: 3 });
+    const q = dayTask('q', { taskId: 'u', sortOrder: 4 });
+    const row = (key: string, taskId: string | null, dayTaskId: string | null, minutes = 20): PlanRow => ({
+      key, taskId, topicId: 'A', name: key, colorKey: 'study', kind: 'timed', minutes, cue: 'c', treat: null,
+      ticked: true, reason: 'default', forwardedFromDayKey: null, dayTaskId,
+    });
+    const draft: PlanDraft = {
+      dayKey: THU,
+      groups: [{
+        topicId: 'A',
+        rows: [
+          row('t', 't', null),        // no dayTaskId, but taskId t exists as p -> update p
+          row('t2', 't', null, 40),   // second row for t -> p already updated -> dropped
+          row('u1', 'u', null),       // taskId u exists as q, but q is claimed by u2 -> dropped
+          row('u2', 'u', 'q', 25),    // q via dayTaskId -> update q
+          row('n', 'new', null),      // genuinely new -> insert
+          row('o', null, null),       // one-off -> insert
+        ],
+      }],
+      notOn: [],
+    };
+    const out = confirmPlan(draft, [p, q], []);
+    expect(out.update).toEqual([
+      { ...p, budgetSec: 1200, cue: 'c', sortOrder: 0 },
+      { ...q, budgetSec: 1500, cue: 'c', sortOrder: 3 },
+    ]);
+    expect(out.insert.map((r) => [r.taskId, r.sortOrder])).toEqual([['new', 4], [null, 5]]);
+    expect(out.deleteIds).toEqual([]);
+  });
+
+  it('inserts forwarded rows with forwardedFromDayKey when they are not in existing', () => {
+    const fw = dayTask('f', { forwardedFromDayKey: '2026-10-28', kind: 'check', budgetSec: 0 });
+    const out = confirmPlan(build([], null, [fw]), [], []);
+    expect(out.insert[0]).toMatchObject({ forwardedFromDayKey: '2026-10-28', completedAt: null });
+  });
+});
+
+describe('plannableDays', () => {
+  it('tomorrow only once today is closed (confirmed or not)', () => {
+    expect(plannableDays(THU, { ...day(1), closedAt: 5, closedBy: 'user' })).toEqual(['2026-10-30']);
+    expect(plannableDays(THU, { ...day(null), closedAt: 5, closedBy: 'auto' })).toEqual(['2026-10-30']);
+  });
+  it('today stays plannable while open, even after its plan was confirmed (ADR-009)', () => {
+    expect(plannableDays(THU, day(1))).toEqual([THU, '2026-10-30']);
+  });
+  it('today and tomorrow when today has no plan', () => {
+    expect(plannableDays(THU, null)).toEqual([THU, '2026-10-30']);
+    expect(plannableDays(THU, day(null))).toEqual([THU, '2026-10-30']);
+  });
+  it('crosses month ends', () => {
+    expect(plannableDays('2026-10-31', null)).toEqual(['2026-10-31', '2026-11-01']);
+  });
+});
+
+describe('prefillUnplanned', () => {
+  it('returns default rows as drafts, skipping non-default, not-on and forwarded rows', () => {
+    const tasks = [
+      task('a', 'A', 1), task('b', 'A', 2, { isDefault: false }),
+      task('c', 'A', 3, { repeatMask: MON_BIT }), task('e', 'B', 1),
+    ];
+    const fw = dayTask('f', { forwardedFromDayKey: '2026-10-28', kind: 'check', budgetSec: 0 });
+    const out = prefillUnplanned({ dayKey: THU, topics, tasks, day: null, dayTasks: [fw] });
+    expect(out.map((r) => r.taskId)).toEqual(['a', 'e']);
+    expect(out.every((r) => r.forwardedFromDayKey == null && r.completedAt == null)).toBe(true);
+    // plan order: A group = a, b, f, then B's e at index 3
+    expect(out.map((r) => r.sortOrder)).toEqual([0, 3]);
+  });
+  it('(5) is idempotent: a second call with the first result stored returns []', () => {
+    const tasks = [task('a', 'A', 1), task('e', 'B', 1), task('b', 'A', 2, { isDefault: false })];
+    const input = { dayKey: THU, topics, tasks, day: day(null), dayTasks: [] as DayTask[] };
+    const first = prefillUnplanned(input);
+    expect(first.map((r) => r.taskId)).toEqual(['a', 'e']);
+    const stored = first.map((r, i) => ({ ...r, id: `p${i}` }));
+    expect(prefillUnplanned({ ...input, dayTasks: stored })).toEqual([]);
+    // Partly present: only the missing default is returned.
+    expect(prefillUnplanned({ ...input, dayTasks: [stored[0]] }).map((r) => r.taskId)).toEqual(['e']);
+  });
+  it('is empty with no defaults', () => {
+    expect(prefillUnplanned({ dayKey: THU, topics, tasks: [], day: null, dayTasks: [] })).toEqual([]);
+  });
+});

@@ -1,0 +1,161 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getDay, loadDayBundle } from '../../data/repos/days';
+import { getDayStartHour } from '../../data/repos/settings';
+import { getTask, listTasks } from '../../data/repos/tasks';
+import { getTopic, listTopics } from '../../data/repos/topics';
+import { dayKeyOf } from '../../domain/dayKey';
+import {
+  addOneOff as addOneOffTo,
+  buildPlan,
+  canConfirm as canConfirmDraft,
+  plannableDays,
+  setCue as setCueOn,
+  setTicked,
+  setTreat as setTreatOn,
+  stepMinutes,
+} from '../../domain/plan';
+import type { PlanDraft } from '../../domain/plan';
+import type { DayKey, Task, TaskKind } from '../../domain/types';
+import { confirmDayPlan } from '../actions/plan';
+import { now } from '../clock';
+import { getDb } from '../dbRef';
+import { ValidationError } from '../errors';
+import { useDataVersion } from '../store';
+
+export interface PlanDraftApi {
+  draft: PlanDraft | null;
+  plannable: boolean;
+  dirty: boolean;
+  totals: { count: number; minutes: number };
+  toggle(key: string): void;
+  step(key: string, delta: 5 | -5): void;
+  setCue(key: string, v: string | null): void;
+  setTreat(key: string, v: string | null): void;
+  addOneOff(row: { topicId: string; name: string; kind: TaskKind; minutes: number }): void;
+  canConfirm: boolean;
+  /**
+   * confirmDayPlan(dayKey, draft), then freeze: later 'days' bumps no longer change draft, plannable, dirty,
+   * totals or canConfirm for this mount. Throws (and does not freeze) if the confirm fails.
+   */
+  confirm(): void;
+}
+
+type Snapshot = { dayKey: DayKey; draft: PlanDraft; dirty: boolean };
+
+/**
+ * In-memory plan draft for `dayKey`; nothing is written until confirmDayPlan. The base plan is built
+ * once per dayKey and rebuilt only when the days table changes underneath; edits (dirty) always win.
+ */
+export function usePlanDraft(dayKey: DayKey): PlanDraftApi {
+  const daysVersion = useDataVersion(['days', 'settings']);
+  const db = getDb();
+  const todayKey = dayKeyOf(now(), getDayStartHour(db));
+
+  const { plannable, base } = useMemo(() => {
+    const ok = plannableDays(todayKey, getDay(db, todayKey)).includes(dayKey);
+    if (!ok) return { plannable: false, base: null };
+    const bundle = loadDayBundle(db, dayKey);
+    const dayTasks = bundle?.dayTasks ?? [];
+    const tasks: Task[] = listTasks(db);
+    const known = new Set(tasks.map(t => t.id));
+    for (const d of dayTasks) {
+      // a deleted task still referenced by this day's rows must be in the input (doc 04 section 11)
+      if (d.taskId != null && !known.has(d.taskId)) {
+        const t = getTask(db, d.taskId);
+        if (t) {
+          tasks.push(t);
+          known.add(t.id);
+        }
+      }
+    }
+    const built = buildPlan({ dayKey, topics: listTopics(db), tasks, day: bundle?.day ?? null, dayTasks });
+    return { plannable: true, base: built };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dayKey, todayKey and the days version are the rebuild keys
+  }, [db, dayKey, todayKey, daysVersion]);
+
+  const [edited, setEdited] = useState<{ dayKey: DayKey; draft: PlanDraft } | null>(null);
+  const mine = edited != null && edited.dayKey === dayKey ? edited.draft : null;
+  // frozen after this hook's own confirm: the confirm's 'days' bump must not rebuild what the screen shows
+  const [frozenState, setFrozen] = useState<Snapshot | null>(null);
+  const frozen = frozenState != null && frozenState.dayKey === dayKey ? frozenState : null;
+  const live = plannable ? (mine ?? base) : null;
+  const draft = frozen ? frozen.draft : live;
+  const isPlannable = frozen ? true : plannable;
+  const dirty = frozen ? frozen.dirty : plannable && mine != null;
+
+  // refs so confirm() keeps one identity; synced after commit, before any user event can call it
+  const current = useRef<Snapshot | null>(null);
+  const frozenRef = useRef<Snapshot | null>(null);
+  useEffect(() => {
+    current.current = draft ? { dayKey, draft, dirty } : null;
+    frozenRef.current = frozen;
+  });
+
+  const confirm = useCallback(() => {
+    const snap = current.current;
+    if (frozenRef.current != null && frozenRef.current.dayKey === snap?.dayKey) return; // already confirmed here
+    if (!snap) throw new ValidationError('dayKey', 'nothing to confirm');
+    confirmDayPlan(snap.dayKey, snap.draft); // throws -> not frozen; the caller's guard resets
+    frozenRef.current = snap;
+    setFrozen(snap); // batched with the bump('days') above, so no render shows the rebuilt base
+  }, []);
+
+  const edit = useCallback(
+    (fn: (d: PlanDraft) => PlanDraft) => {
+      if (!base || frozenRef.current != null) return;
+      setEdited(prev => {
+        const cur = prev != null && prev.dayKey === dayKey ? prev.draft : base;
+        return { dayKey, draft: fn(cur) };
+      });
+    },
+    [base, dayKey],
+  );
+
+  const totals = useMemo(() => {
+    let count = 0;
+    let minutes = 0;
+    if (draft) {
+      for (const r of [...draft.groups.flatMap(g => g.rows), ...draft.notOn]) {
+        if (!r.ticked) continue;
+        count += 1;
+        if (r.kind === 'timed') minutes += r.minutes;
+      }
+    }
+    return { count, minutes };
+  }, [draft]);
+
+  const toggle = useCallback(
+    (key: string) => {
+      edit(d => {
+        const row = [...d.groups.flatMap(g => g.rows), ...d.notOn].find(r => r.key === key);
+        return row ? setTicked(d, key, !row.ticked) : d;
+      });
+    },
+    [edit],
+  );
+  const step = useCallback((key: string, delta: 5 | -5) => edit(d => stepMinutes(d, key, delta)), [edit]);
+  const setCue = useCallback((key: string, v: string | null) => edit(d => setCueOn(d, key, v)), [edit]);
+  const setTreat = useCallback((key: string, v: string | null) => edit(d => setTreatOn(d, key, v)), [edit]);
+  const addOneOff = useCallback(
+    (row: { topicId: string; name: string; kind: TaskKind; minutes: number }) => {
+      const topic = getTopic(db, row.topicId);
+      if (!topic) return;
+      edit(d => addOneOffTo(d, { ...row, colorKey: topic.colorKey }));
+    },
+    [db, edit],
+  );
+
+  return {
+    draft,
+    plannable: isPlannable,
+    dirty,
+    totals,
+    toggle,
+    step,
+    setCue,
+    setTreat,
+    addOneOff,
+    canConfirm: draft != null && canConfirmDraft(draft),
+    confirm,
+  };
+}
