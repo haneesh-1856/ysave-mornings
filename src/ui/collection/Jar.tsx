@@ -17,6 +17,8 @@ export type CollectionProps = {
   scale?: number;
   /** Only the newest item arrives with a drop-and-bounce (instant under Reduce Motion). */
   animateLast?: boolean;
+  /** The lid swings shut when `closed` flips false -> true while mounted (instant under Reduce Motion). Mounting closed shows it closed. */
+  animateLid?: boolean;
 };
 
 const DROP_FROM = 70; // viewBox units above rest
@@ -54,11 +56,48 @@ function useDrop(lastKey: string | null, enabled: boolean, distance: number) {
   return useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
 }
 
+const LID_OPEN_ROT = 16; // degrees
+const LID_OPEN_LIFT = 14; // viewBox units (open lid y = -10, closed y = 4)
+
+/**
+ * Lid progress 0 (open) .. 1 (closed). Starts from the first `closed` value, so mounting closed never plays;
+ * only a later false -> true flip swings it shut (reopening is instant).
+ */
+function useLid(closed: boolean, enabled: boolean) {
+  const { animate, reduce } = useMotion();
+  const p = useSharedValue(closed ? 1 : 0);
+  const was = useRef(closed);
+  useEffect(() => {
+    if (was.current === closed) return;
+    was.current = closed;
+    if (!enabled) return;
+    p.value = closed && !reduce ? animate(1) : closed ? 1 : 0;
+    // `animate`/`reduce` are not triggers; `closed` is.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closed, enabled]);
+  return p;
+}
+
 /** Glass jar: marbles stacked from the bottom, gold ring for overtime, a lid (flat and accent-colored when closed). */
-export function Jar({ items, closed, scale = 1, animateLast = false }: CollectionProps) {
+export function Jar({ items, closed, scale = 1, animateLast = false, animateLid = false }: CollectionProps) {
   const t = useTheme();
   const { marbles, overflow } = useMemo(() => layoutJar(items), [items]);
   const W = JAR_W * scale, H = JAR_H * scale;
+  const lid = useLid(closed, animateLid);
+  const s = Math.min(W / 70, H / 98); // viewBox is 70 x 98 inside W x H
+  const hingeX = (W - 70 * s) / 2 + 17 * s - W / 2; // lid hinge, relative to the view centre
+  const hingeY = (4 + 12) * s - H / 2;
+  const lidStyle = useAnimatedStyle(() => {
+    const open = 1 - lid.value;
+    return {
+      transform: [
+        { translateY: -LID_OPEN_LIFT * s * open },
+        { translateX: hingeX }, { translateY: hingeY },
+        { rotate: `${-LID_OPEN_ROT * open}deg` },
+        { translateX: -hingeX }, { translateY: -hingeY },
+      ],
+    };
+  });
   const dropStyle = useDrop(lastItemKey(items), animateLast, DROP_FROM * scale);
 
   // The dropping marble is its own overlay so a plain Animated.View transform moves it (no animated SVG props).
@@ -71,12 +110,14 @@ export function Jar({ items, closed, scale = 1, animateLast = false }: Collectio
   return (
     <View accessible accessibilityRole="image" accessibilityLabel={label} style={{ width: W, height: H }}>
       <Svg width={W} height={H} viewBox={JAR_VIEWBOX}>
-        <Rect
-          testID={closed ? 'jar-lid-closed' : 'jar-lid-open'}
-          x={17} y={lidY} width={36} height={8} rx={3}
-          fill={closed ? t.c.accent : t.c.line}
-          rotation={lidRot} origin={`17, ${lidY}`}
-        />
+        {animateLid ? null : (
+          <Rect
+            testID={closed ? 'jar-lid-closed' : 'jar-lid-open'}
+            x={17} y={lidY} width={36} height={8} rx={3}
+            fill={closed ? t.c.accent : t.c.line}
+            rotation={lidRot} origin={`17, ${lidY}`}
+          />
+        )}
         <Path d={JAR_PATH} fill={t.c.surface} fillOpacity={0.75} stroke={t.c.muted} strokeWidth={1.4} />
         <Path d="M14 30 c0 -6 2 -9 5 -11" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" opacity={0.8} />
         <Path d="M13 40 v24" stroke="#fff" strokeWidth={3} strokeLinecap="round" opacity={0.55} />
@@ -87,6 +128,14 @@ export function Jar({ items, closed, scale = 1, animateLast = false }: Collectio
           </SvgText>
         ) : null}
       </Svg>
+      {animateLid ? (
+        // The lid is its own overlay so a plain Animated.View transform swings it (no animated SVG props); drawn flat-closed, posed open by the transform.
+        <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: W, height: H }, lidStyle]}>
+          <Svg width={W} height={H} viewBox={JAR_VIEWBOX}>
+            <Rect testID={closed ? 'jar-lid-closed' : 'jar-lid-open'} x={17} y={4} width={36} height={8} rx={3} fill={closed ? t.c.accent : t.c.line} />
+          </Svg>
+        </Animated.View>
+      ) : null}
       {dropIndex >= 0 ? (
         <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: W, height: H }, dropStyle]}>
           <Svg width={W} height={H} viewBox={JAR_VIEWBOX}>

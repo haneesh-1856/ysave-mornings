@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { addDays } from '@/domain/dayKey';
@@ -9,6 +9,7 @@ import type { Epoch } from '@/domain/types';
 import { toggleCheckTask } from '@/state/actions/run';
 import { now } from '@/state/clock';
 import { ValidationError } from '@/state/errors';
+import { useChain } from '@/state/hooks/useChain';
 import { useDayPlan } from '@/state/hooks/useDayPlan';
 import { useNow } from '@/state/hooks/useNow';
 import { usePlannableDays } from '@/state/hooks/usePlannableDays';
@@ -17,6 +18,7 @@ import { useToday } from '@/state/hooks/useToday';
 import type { TodayRow } from '@/state/hooks/useToday';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
+import { Chain } from '@/ui/Chain';
 import { CheckRow } from '@/ui/CheckRow';
 import { weekdayName } from '@/ui/dayNames';
 import { Dock } from '@/ui/Dock';
@@ -76,14 +78,29 @@ function RunningRow({ row, onOpen }: { row: TodayRow; onOpen: (dayTaskId: string
 
 const noop = () => {};
 
-const TimedRow = memo(function TimedRow({ row, onOpen }: { row: TodayRow; onOpen: (id: string) => void }) {
-  if (row.state === 'running') return <RunningRow row={row} onOpen={onOpen} />;
-  return <TimedRowAt row={row} at={now()} onOpen={onOpen} />;
+const TimedRow = memo(function TimedRow({ row, onOpen, locked }: { row: TodayRow; onOpen: (id: string) => void; locked: boolean }) {
+  const inner = row.state === 'running' ? <RunningRow row={row} onOpen={onOpen} /> : <TimedRowAt row={row} at={now()} onOpen={onOpen} />;
+  if (!locked) return inner;
+  const { dayTask, sessions, state } = row;
+  const at = now();
+  const label = state === 'check-open' || state === 'check-done'
+    ? dayTask.name
+    : timedLabel(dayTask.name, Math.round(dayTask.budgetSec / 60), state, remainingMs(dayTask.budgetSec, sessions, at), overtimeMs(dayTask.budgetSec, sessions, at), isGold(dayTask.budgetSec, sessions, at));
+  return <Locked label={label}>{inner}</Locked>;
 });
 
-const CheckTaskRow = memo(function CheckTaskRow({ row, onToggle }: { row: TodayRow; onToggle: (id: string) => void }) {
-  const from = row.dayTask.forwardedFromDayKey;
+/** A closed day's row announces as one disabled item (the ui rows have no disabled prop). */
+function Locked({ label, children }: { label: string; children: ReactNode }) {
   return (
+    <View accessible accessibilityLabel={label} accessibilityState={{ disabled: true }}>
+      {children}
+    </View>
+  );
+}
+
+const CheckTaskRow = memo(function CheckTaskRow({ row, onToggle, locked }: { row: TodayRow; onToggle: (id: string) => void; locked: boolean }) {
+  const from = row.dayTask.forwardedFromDayKey;
+  const checkRow = (
     <CheckRow
       name={row.dayTask.name}
       topicColor={row.dayTask.colorKey}
@@ -92,6 +109,8 @@ const CheckTaskRow = memo(function CheckTaskRow({ row, onToggle }: { row: TodayR
       onToggle={() => onToggle(row.dayTask.id)}
     />
   );
+  if (!locked) return checkRow;
+  return <Locked label={`${row.dayTask.name}, ${row.state === 'check-done' ? 'done' : 'not done'}`}>{checkRow}</Locked>;
 });
 
 export default function TodayScreen() {
@@ -102,6 +121,7 @@ export default function TodayScreen() {
   const tomorrow = addDays(todayKey, 1);
   const tomorrowPlan = useDayPlan(tomorrow);
   const tomorrowPlanned = tomorrowPlan.day?.planConfirmedAt != null;
+  const chain = useChain();
   const [shut, setShut] = useState<Record<string, boolean>>({});
 
   const plan = (dayKey: string) => router.push({ pathname: '/plan/[dayKey]', params: { dayKey } });
@@ -134,6 +154,7 @@ export default function TodayScreen() {
 
   return (
     <Screen tabs footer={<Dock items={items} closed={closed} />}>
+      <Chain links={chain} />
       <Header title="Today" note={empty ? undefined : `${done} of ${total} done`} />
       {closed ? (
         <Card>
@@ -141,6 +162,7 @@ export default function TodayScreen() {
           <T variant="sub">It is read-only now.</T>
         </Card>
       ) : null}
+      {!closed && !empty ? <Button label="Close today" kind="ghost" onPress={() => router.push('/close')} /> : null}
       {canEditToday && !todayPlanned ? <Button label="Plan today" onPress={() => plan(todayKey)} /> : null}
       {todayPlanned ? (
         <Card>
@@ -177,9 +199,9 @@ export default function TodayScreen() {
             onToggle={() => setShut((s) => ({ ...s, [g.topicId]: !s[g.topicId] }))}>
             {g.rows.map((r) =>
               r.dayTask.kind === 'timed' ? (
-                <TimedRow key={r.dayTask.id} row={r} onOpen={closed ? noop : openRun} />
+                <TimedRow key={r.dayTask.id} row={r} onOpen={closed ? noop : openRun} locked={closed} />
               ) : (
-                <CheckTaskRow key={r.dayTask.id} row={r} onToggle={closed ? noop : toggle} />
+                <CheckTaskRow key={r.dayTask.id} row={r} onToggle={closed ? noop : toggle} locked={closed} />
               ),
             )}
           </Fold>

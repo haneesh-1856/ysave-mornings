@@ -259,3 +259,38 @@ describe('Today: closed day', () => {
     expect(screen.getByText('0 of 4 done')).toBeTruthy();
   });
 });
+
+describe('Today: chain and Close button', () => {
+  it('shows the soft chain with 8 links', async () => {
+    plan(TODAY);
+    await renderThemed(<TodayScreen />);
+    expect(screen.getByLabelText(/^Last 8 days: \d+ active, \d+ rest$/)).toBeTruthy();
+  });
+
+  it('shows Close today when open and planned, and pushes /close', async () => {
+    plan(TODAY);
+    await renderThemed(<TodayScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Close today' }));
+    expect(mockPush).toHaveBeenCalledWith('/close');
+  });
+
+  it('hides Close today when nothing is planned or the day is closed', async () => {
+    const view = await renderThemed(<TodayScreen />);
+    expect(screen.queryByRole('button', { name: 'Close today' })).toBeNull();
+    await view.unmount();
+    plan(TODAY);
+    closeToday();
+    await renderThemed(<TodayScreen />);
+    expect(screen.queryByRole('button', { name: 'Close today' })).toBeNull();
+  });
+
+  it('announces closed-day rows as disabled', async () => {
+    plan(TODAY);
+    closeToday();
+    await renderThemed(<TodayScreen />);
+    const disabled = (label: string) =>
+      screen.getAllByLabelText(label).some((n) => (n.props as { accessibilityState?: { disabled?: boolean } }).accessibilityState?.disabled === true);
+    expect(disabled('Read, 5 minutes, start')).toBe(true);
+    expect(disabled('Sums, not done')).toBe(true);
+  });
+});

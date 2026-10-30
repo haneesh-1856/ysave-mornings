@@ -7,7 +7,9 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { db, migrations } from '@/data/db';
+import { useMorningRedirect } from '@/screens/useMorningRedirect';
 import { setDb } from '@/state/dbRef';
+import { useDayBoundary } from '@/state/hooks/useDayBoundary';
 import { useReconcileOnForeground } from '@/state/hooks/useReconcileOnForeground';
 import { FONT_ASSETS } from '@/theme/fonts';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
@@ -23,6 +25,8 @@ const STACK_ANIMATION = { slide: 'slide_from_right', fade: 'fade', rise: 'slide_
 function RootStack() {
   const t = useTheme();
   useReconcileOnForeground(); // rollover + task completions on open and on every return to the app
+  useDayBoundary(); // same, at the day boundary while the app stays open
+  useMorningRedirect(); // a new day while the app is open routes to Morning once
   return (
     <>
       <StatusBar style={t.isDark ? 'light' : 'dark'} />

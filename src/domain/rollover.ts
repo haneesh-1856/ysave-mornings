@@ -143,7 +143,8 @@ export function rollover(input: {
     autoClosed.push(b.day.dayKey);
   }
 
-  if (today.day === null || today.day.planConfirmedAt === null) {
+  // A closed today is final (doc 04 §6): never prefill it, even if it was closed before being planned.
+  if (today.day === null || (today.day.planConfirmedAt === null && today.day.closedAt === null)) {
     if (today.day === null) {
       ops.createDays.push({
         dayKey: todayKey, planConfirmedAt: null, closedAt: null, closedBy: null, dayStartHour,

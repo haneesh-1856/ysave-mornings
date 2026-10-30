@@ -38,3 +38,8 @@ Interfaces: [contract.md](contract.md).
 All 4 chunks PASS; 3 errors found by checkers (chunks 1, 2; plus none in 3–4), all fixed by Opus and re-checked.
 Lead re-ran: typecheck ✓, lint ✓, `npm run test:coverage` ✓: 43 suites, 445 tests, 98.3 % lines, domain gate holds.
 No screen, route or ui file imports `src/data` or `getDb`. **Phone check pending.**
+
+## Phone check (2026-10-29): passed
+The user confirmed M4 on the phone: Today counts and checklist ticking, Start/Pause/Resume, leaving Run doesn't
+pause, **a 5-minute task completed while the phone was locked**, no celebration replay on reopening, overtime
+and gold ring at Stop. **M4 is done.**

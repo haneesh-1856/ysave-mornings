@@ -91,3 +91,46 @@ describe('animateLast', () => {
     expect(getByTestId('marble-0')).toBeTruthy();
   });
 });
+
+describe('animateLid', () => {
+  it('swings shut only when closed flips false -> true', async () => {
+    const { rerender, getByTestId } = await renderThemed(<Jar items={[]} closed={false} animateLid />);
+    expect(mockAnimate).not.toHaveBeenCalled();
+    getByTestId('jar-lid-open');
+    await rerender(<Jar items={[]} closed animateLid />);
+    expect(mockAnimate).toHaveBeenCalledTimes(1);
+    expect(mockAnimate).toHaveBeenCalledWith(1);
+    getByTestId('jar-lid-closed');
+    await rerender(<Jar items={[item(1)]} closed animateLid scale={1.5} />);
+    expect(mockAnimate).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not animate when mounted already closed', async () => {
+    const { getByTestId } = await renderThemed(<Jar items={[]} closed animateLid />);
+    expect(mockAnimate).not.toHaveBeenCalled();
+    getByTestId('jar-lid-closed');
+  });
+
+  it('does nothing extra without animateLid, and reopening is instant', async () => {
+    const a = await renderThemed(<Jar items={[]} closed={false} />);
+    await a.rerender(<Jar items={[]} closed />);
+    expect(mockAnimate).not.toHaveBeenCalled();
+    const b = await renderThemed(<Jar items={[]} closed animateLid />);
+    await b.rerender(<Jar items={[]} closed={false} animateLid />);
+    expect(mockAnimate).not.toHaveBeenCalled();
+  });
+
+  it('is instant under Reduce Motion', async () => {
+    mockReduce = true;
+    const { rerender, getByTestId } = await renderThemed(<Jar items={[]} closed={false} animateLid />);
+    await rerender(<Jar items={[]} closed animateLid />);
+    expect(mockAnimate).not.toHaveBeenCalled();
+    getByTestId('jar-lid-closed');
+  });
+
+  it('Collection passes animateLid through', async () => {
+    const { rerender } = await renderThemed(<Collection items={[]} closed={false} animateLid />);
+    await rerender(<Collection items={[]} closed animateLid />);
+    expect(mockAnimate).toHaveBeenCalledTimes(1);
+  });
+});

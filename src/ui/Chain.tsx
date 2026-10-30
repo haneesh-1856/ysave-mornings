@@ -8,8 +8,13 @@ export type ChainLink = 'solid' | 'rest' | 'today';
 export function Chain({ links }: { links: ChainLink[] }) {
   const t = useTheme();
   let solid = 0;
+  const rest = links.filter(l => l === 'rest').length;
+  const active = links.length - rest;
   return (
-    <View style={{ flexDirection: 'row', gap: 4 }} accessibilityLabel={`Last ${links.length} days`}>
+    <View
+      accessible
+      style={{ flexDirection: 'row', gap: 4 }}
+      accessibilityLabel={`Last ${links.length} days: ${active} active, ${rest} rest`}>
       {links.map((l, i) => {
         const color = l === 'today' ? t.c.sun : l === 'rest' ? t.c.muted : t.chain[solid++ % 3];
         return (

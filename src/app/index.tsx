@@ -1,6 +1,8 @@
 import { Redirect } from 'expo-router';
+import { useMorning } from '@/state/hooks/useMorning';
 
-// The app opens on Today. Onboarding and the Morning screen will redirect from here in later milestones.
+// The app opens on Morning when a new day has begun (and there is history), otherwise on Today.
 export default function Index() {
-  return <Redirect href="/today" />;
+  const { due } = useMorning();
+  return <Redirect href={due ? '/morning' : '/today'} />;
 }

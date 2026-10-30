@@ -231,6 +231,13 @@ describe('rollover: today', () => {
     expect(r.insertDayTasks).toEqual([]);
   });
 
+  it('never prefills a closed today, even one closed before its plan was confirmed', () => {
+    const day = dayRow('2026-10-29', { planConfirmedAt: null, closedAt: NOW - MIN, closedBy: 'user' });
+    const r = rollover(input({ tasks, today: { day, dayTasks: [] } }));
+    expect(r.createDays).toEqual([]);
+    expect(r.insertDayTasks).toEqual([]);
+  });
+
   it('does not create days that were skipped entirely', () => {
     const r = rollover(input({ tasks }));
     expect(r.createDays.map((d) => d.dayKey)).toEqual(['2026-10-29']);
