@@ -1,8 +1,6 @@
 import { ValidationError } from '../../data/errors';
 import { loadDayBundle, setCheckCompleted } from '../../data/repos/days';
 import { endSession, getOpenSession, startSession } from '../../data/repos/sessions';
-import { getDayStartHour } from '../../data/repos/settings';
-import { dayKeyOf } from '../../domain/dayKey';
 import { startDecision, toggleCheck } from '../../domain/timer';
 import type { StartDecision } from '../../domain/timer';
 import type { Day, DayTask, Session } from '../../domain/types';
@@ -10,6 +8,7 @@ import { now } from '../clock';
 import { getDb } from '../dbRef';
 import { newId } from '../ids';
 import { bump } from '../store';
+import { todayKey } from '../today';
 import { reconcile } from './reconcile';
 
 const START_MESSAGES: Record<Extract<StartDecision, { ok: false }>['reason'], string> = {
@@ -23,7 +22,7 @@ const START_MESSAGES: Record<Extract<StartDecision, { ok: false }>['reason'], st
 function loadTarget(dayTaskId: string): { dayTask: DayTask; day: Day; sessions: Session[] } {
   reconcile();
   const db = getDb();
-  const bundle = loadDayBundle(db, dayKeyOf(now(), getDayStartHour(db)));
+  const bundle = loadDayBundle(db, todayKey(db, now()));
   const dayTask = bundle?.dayTasks.find((t) => t.id === dayTaskId);
   if (!bundle || !dayTask) throw new ValidationError('dayTaskId', "This task is not on today's list");
   return { dayTask, day: bundle.day, sessions: bundle.sessionsByDayTask[dayTaskId] ?? [] };

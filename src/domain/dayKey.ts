@@ -59,6 +59,38 @@ export function dayKeyOf(instant: Epoch, dayStartHour: number): DayKey {
   return instant < dayStartOf(calendarKey, dayStartHour) ? addDays(calendarKey, -1) : calendarKey;
 }
 
+/**
+ * The hour day `dayKey` ENDS at (its boundary with the next day): its own row's snapshot; for a day with no
+ * row, the next day's row snapshot (that row was created under the hour in force when it began, and rows
+ * after today always carry the setting); only with neither, the setting. So a setting change can never
+ * move the boundary into an existing today, even when yesterday has no row.
+ */
+export function dayEndHourOf(
+  dayKey: DayKey,
+  settingHour: number,
+  snapshotOf: (k: DayKey) => number | undefined,
+): number {
+  return snapshotOf(dayKey) ?? snapshotOf(addDays(dayKey, 1)) ?? settingHour;
+}
+
+/**
+ * The day running at `now` when each day ends at its own hour (doc 04 section 1, see dayEndHourOf).
+ * Day D runs [end(D-1), end(D)) with end(D) = dayEndOf(D, dayEndHourOf(D)), always within D+1's calendar
+ * date (00:00-23:00), so the days never overlap or skip and today is either the calendar date c of `now`
+ * or c-1: c-1 while it has not ended yet, else c. With no rows (or equal hours everywhere) this equals
+ * dayKeyOf(now, settingHour).
+ */
+export function currentDayKey(
+  now: Epoch,
+  settingHour: number,
+  snapshotOf: (k: DayKey) => number | undefined,
+): DayKey {
+  assertHour(settingHour);
+  if (!Number.isFinite(now)) throw new Error(`Invalid instant: ${now}`);
+  const prev = addDays(toKey(new Date(now)), -1);
+  return now < dayEndOf(prev, dayEndHourOf(prev, settingHour, snapshotOf)) ? prev : addDays(prev, 1);
+}
+
 /** 0 = Monday … 6 = Sunday. */
 export function weekdayIndex(dayKey: DayKey): number {
   assertDayKey(dayKey);

@@ -1,15 +1,15 @@
 import { useMemo } from 'react';
 import { loadDayBundle } from '../../data/repos/days';
-import { getDayStartHour } from '../../data/repos/settings';
 import { listTasks } from '../../data/repos/tasks';
 import { getTopic, listTopics } from '../../data/repos/topics';
 import type { CollectionItem } from '../../domain/collection';
-import { addDays, dayKeyOf, weekStartOf } from '../../domain/dayKey';
+import { addDays, weekStartOf } from '../../domain/dayKey';
 import { topicWeeklyMinutes, weekDots } from '../../domain/stats';
 import type { DayBundle, Task, Topic } from '../../domain/types';
 import { now } from '../clock';
 import { getDb } from '../dbRef';
 import { useDataVersion } from '../store';
+import { todayKey } from '../today';
 
 export interface TopicEntry {
   topic: Topic;
@@ -22,7 +22,7 @@ export function useTopicsLibrary(): { topics: TopicEntry[]; taskCount: number } 
   const version = useDataVersion(['topics', 'tasks', 'days']);
   const db = getDb();
   const at = now();
-  const dayKey = dayKeyOf(at, getDayStartHour(db)); // cheap; a new day recomputes the memo
+  const dayKey = todayKey(db, at); // cheap; a new day recomputes the memo
   return useMemo(() => {
     const topics = listTopics(db);
     const tasks = listTasks(db);

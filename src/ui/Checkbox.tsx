@@ -4,17 +4,18 @@ import { useTheme } from '@/theme/ThemeProvider';
 
 import { T } from './T';
 
-type Props = { checked: boolean; onChange: (v: boolean) => void; label: string };
+type Props = { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean };
 
 /** A 44 pt touch target around a 26 pt box. */
-export function Checkbox({ checked, onChange, label }: Props) {
+export function Checkbox({ checked, onChange, label, disabled = false }: Props) {
   const t = useTheme();
   return (
     <Pressable
       accessibilityRole="checkbox"
       accessibilityLabel={label}
-      accessibilityState={{ checked }}
-      onPress={() => onChange(!checked)}
+      accessibilityState={{ checked, disabled }}
+      disabled={disabled}
+      onPress={disabled ? undefined : () => onChange(!checked)}
       style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
       <T
         importantForAccessibility="no"

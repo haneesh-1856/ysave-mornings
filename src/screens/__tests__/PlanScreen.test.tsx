@@ -2,7 +2,10 @@ import { act, fireEvent, screen } from '@testing-library/react-native';
 
 import { getDay, loadDayBundle } from '@/data/repos/days';
 import { applyOps } from '@/data/repos/ops';
-import { getTask } from '@/data/repos/tasks';
+import { getTask, listTasks } from '@/data/repos/tasks';
+import { listTopics } from '@/data/repos/topics';
+import { buildPlan } from '@/domain/plan';
+import { saveDayDraft } from '@/state/actions/plan';
 import { createTask, createTopic, setTaskNote } from '@/state/actions/library';
 import { getDb } from '@/state/dbRef';
 import { setupState, teardownState } from '@/state/testSupport';
@@ -108,7 +111,7 @@ describe('PlanScreen', () => {
       getDb(),
       {
         closeSessions: [], completions: [], outcomes: [], insertDayTasks: [], closeDays: [],
-        createDays: [{ dayKey: '2026-10-29', planConfirmedAt: null, closedAt: 1, closedBy: 'user', dayStartHour: 4 }],
+        createDays: [{ dayKey: '2026-10-29', planConfirmedAt: null, planDraftedAt: null, closedAt: 1, closedBy: 'user', dayStartHour: 4 }],
       },
       () => 'x',
       1,
@@ -202,5 +205,61 @@ describe('PlanScreen', () => {
     await fireEvent.changeText(screen.getByLabelText('Note'), 'quick');
     await fireEvent.press(edit);
     expect(getTask(getDb(), read.id)?.note).toBe('quick');
+  });
+
+  describe('draft mode (a day after tomorrow)', () => {
+    const LATER = '2026-11-04'; // Wednesday
+
+    it('titles it Plan ahead with the date, and offers Save draft instead of confirm', async () => {
+      seed();
+      mockParam = LATER;
+      await renderThemed(<PlanScreen />);
+      expect(screen.getByText('Plan ahead')).toBeTruthy();
+      expect(screen.getByText('Wednesday, 4 November')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Save draft' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: /looks like this/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Discard draft' })).toBeNull(); // nothing saved yet
+      expect(screen.queryByText(/planned$/)).toBeNull();
+    });
+
+    it('Save draft writes a draft (not a plan), goes back once, never opens Planned', async () => {
+      seed();
+      mockParam = LATER;
+      await renderThemed(<PlanScreen />);
+      const save = screen.getByRole('button', { name: 'Save draft' });
+      await fireEvent.press(save);
+      await fireEvent.press(save);
+      expect(mockBack).toHaveBeenCalledTimes(1);
+      expect(mockReplace).not.toHaveBeenCalled();
+      expect(getDay(getDb(), LATER)).toMatchObject({ planConfirmedAt: null });
+      expect(getDay(getDb(), LATER)?.planDraftedAt).not.toBeNull();
+    });
+
+    it('Save draft is disabled while nothing is ticked', async () => {
+      seed();
+      mockParam = LATER;
+      await renderThemed(<PlanScreen />);
+      await fireEvent.press(screen.getByRole('checkbox', { name: 'Include Read' }));
+      await fireEvent.press(screen.getByRole('checkbox', { name: 'Include Notes' }));
+      expect(screen.getByRole('button', { name: 'Save draft' }).props.accessibilityState.disabled).toBe(true);
+      await fireEvent.press(screen.getByRole('button', { name: 'Save draft' }));
+      expect(screen.getByText('Tick at least one task, or discard the draft.')).toBeTruthy();
+      expect(mockBack).not.toHaveBeenCalled();
+    });
+
+    it('Discard draft asks first, can be cancelled, then discards and goes back', async () => {
+      seed();
+      mockParam = LATER;
+      saveDayDraft(LATER, buildPlan({ dayKey: LATER, topics: listTopics(getDb()), tasks: listTasks(getDb()), day: null, dayTasks: [] }));
+      await renderThemed(<PlanScreen />);
+      await fireEvent.press(screen.getByRole('button', { name: 'Discard draft' }));
+      expect(screen.getByText('Discard this draft? Nothing else changes.')).toBeTruthy();
+      await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByText('Discard this draft? Nothing else changes.')).toBeNull();
+      await fireEvent.press(screen.getByRole('button', { name: 'Discard draft' }));
+      await fireEvent.press(screen.getByRole('button', { name: 'Discard' }));
+      expect(mockBack).toHaveBeenCalledTimes(1);
+      expect(getDay(getDb(), LATER)).toBeNull();
+    });
   });
 });

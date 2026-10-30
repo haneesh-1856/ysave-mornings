@@ -43,7 +43,7 @@ function runRollover(db: DB, now: Epoch) {
   const todayKey = dayKeyOf(now, H);
   const bundle = loadDayBundle(db, todayKey);
   return rollover({
-    now,
+    todayKey,
     dayStartHour: H,
     openDays: loadOpenPastDays(db, todayKey),
     today: { day: bundle?.day ?? null, dayTasks: bundle?.dayTasks ?? [] },
@@ -106,7 +106,7 @@ describe('applyOps', () => {
     expect(closed.dayTasks.find((t) => t.id === stretch.id)!.closeOutcome).toBe('let_go');
 
     const next = loadDayBundle(db, TODAY)!;
-    expect(next.day).toMatchObject({ planConfirmedAt: null, closedAt: null, dayStartHour: H });
+    expect(next.day).toMatchObject({ planConfirmedAt: null, planDraftedAt: null, closedAt: null, dayStartHour: H });
     expect(next.dayTasks).toHaveLength(1);
     expect(next.dayTasks[0]).toMatchObject({ taskId: read.taskId, forwardedFromDayKey: D28, completedAt: null });
     expect(next.dayTasks[0].id).not.toBe('');
@@ -127,7 +127,7 @@ describe('applyOps', () => {
       completions: [{ dayTaskId: timed.id, completedAt: 500 }],
       outcomes: [],
       closeDays: [{ dayKey: D27, closedAt: 500, closedBy: 'auto' }],
-      createDays: [{ dayKey: D28, planConfirmedAt: null, closedAt: null, closedBy: null, dayStartHour: H }],
+      createDays: [{ dayKey: D28, planConfirmedAt: null, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: H }],
       insertDayTasks: [
         // replaced below: FK violation (no days row for 2000-01-01), so the LAST step fails
       ],

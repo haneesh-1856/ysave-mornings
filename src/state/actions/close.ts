@@ -2,13 +2,14 @@ import { ValidationError } from '../../data/errors';
 import { getDay, loadDayBundle } from '../../data/repos/days';
 import { applyOps } from '../../data/repos/ops';
 import { getDayStartHour } from '../../data/repos/settings';
-import { addDays, dayKeyOf } from '../../domain/dayKey';
+import { addDays } from '../../domain/dayKey';
 import { closeByHand, missingOutcomes } from '../../domain/rollover';
 import type { CloseOutcome } from '../../domain/types';
 import { now } from '../clock';
 import { getDb } from '../dbRef';
 import { newId } from '../ids';
 import { bump } from '../store';
+import { todayKey as resolveTodayKey } from '../today';
 import { reconcile } from './reconcile';
 
 /** A ValidationError that also carries the day-task ids still lacking a choice (so the screen can highlight them). */
@@ -29,7 +30,7 @@ export function closeToday(outcomes: Record<string, CloseOutcome>): void {
   const db = getDb();
   const at = now();
   const dayStartHour = getDayStartHour(db);
-  const todayKey = dayKeyOf(at, dayStartHour);
+  const todayKey = resolveTodayKey(db, at);
   const bundle = loadDayBundle(db, todayKey);
   if (!bundle) throw new ValidationError('day', 'Nothing to close yet');
   if (bundle.day.closedAt !== null) throw new ValidationError('day', 'Today is already closed');

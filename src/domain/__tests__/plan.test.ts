@@ -1,5 +1,5 @@
 import {
-  addOneOff, buildPlan, canConfirm, confirmPlan, plannableDays, prefillUnplanned,
+  addOneOff, buildPlan, canConfirm, confirmPlan, draftableDays, isDraftable, plannableDays, prefillUnplanned,
   setCue, setTicked, setTreat, stepMinutes,
 } from '../plan';
 import type { PlanDraft, PlanRow } from '../plan';
@@ -21,7 +21,7 @@ const dayTask = (id: string, extra: Partial<DayTask> = {}): DayTask => ({
   closeOutcome: null, sortOrder: 0, ...extra,
 });
 const day = (planConfirmedAt: number | null): Day => ({
-  dayKey: THU, planConfirmedAt, closedAt: null, closedBy: null, dayStartHour: 4,
+  dayKey: THU, planConfirmedAt, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4,
 });
 
 const topics = [topic('B', 2, { colorKey: 'health' }), topic('A', 1)];
@@ -471,5 +471,33 @@ describe('prefillUnplanned', () => {
   });
   it('is empty with no defaults', () => {
     expect(prefillUnplanned({ dayKey: THU, topics, tasks: [], day: null, dayTasks: [] })).toEqual([]);
+  });
+});
+
+describe('drafts (ADR-010)', () => {
+  it('draftableDays: [today + 2 .. today + 365], never today or tomorrow', () => {
+    const list = draftableDays(THU);
+    expect(list[0]).toBe('2026-10-31');
+    expect(list[list.length - 1]).toBe('2027-10-29');
+    expect(list).toHaveLength(364);
+    expect(list).not.toContain(THU);
+    expect(list).not.toContain('2026-10-30');
+  });
+  it('isDraftable agrees with the list and its edges', () => {
+    expect(isDraftable(THU, THU)).toBe(false);
+    expect(isDraftable(THU, '2026-10-30')).toBe(false);
+    expect(isDraftable(THU, '2026-10-31')).toBe(true);
+    expect(isDraftable(THU, '2027-10-29')).toBe(true);
+    expect(isDraftable(THU, '2027-10-30')).toBe(false);
+    expect(isDraftable(THU, '2026-10-01')).toBe(false);
+  });
+  it('buildPlan shows a draft like a confirmed plan: saved rows ticked, no defaults re-added', () => {
+    const tasks = [task('def', 'A', 1), task('other', 'A', 2, { isDefault: false })];
+    const drafted: Day = { ...day(null), planDraftedAt: 5 };
+    const d = build(tasks, drafted, [dayTask('x', { taskId: 'other' })]);
+    expect(find(d, 'x')).toMatchObject({ ticked: true, reason: 'saved', dayTaskId: 'x' });
+    expect(find(d, 'def')).toMatchObject({ ticked: false });
+    // an unplanned, undrafted day would have pre-ticked the default
+    expect(find(build(tasks, day(null)), 'def').ticked).toBe(true);
   });
 });

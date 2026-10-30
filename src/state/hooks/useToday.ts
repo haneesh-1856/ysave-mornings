@@ -1,16 +1,15 @@
 import { useMemo } from 'react';
 import { loadDayBundle } from '../../data/repos/days';
-import { getDayStartHour } from '../../data/repos/settings';
 import { listTopics } from '../../data/repos/topics';
 import { collectionItems } from '../../domain/collection';
 import type { CollectionItem } from '../../domain/collection';
-import { dayKeyOf } from '../../domain/dayKey';
 import { timerState } from '../../domain/timer';
 import type { TimerState } from '../../domain/timer';
 import type { Day, DayKey, DayTask, Session } from '../../domain/types';
 import { now } from '../clock';
 import { getDb } from '../dbRef';
 import { useDataVersion } from '../store';
+import { todayKey as resolveTodayKey } from '../today';
 
 export interface TodayRow {
   dayTask: DayTask;
@@ -38,7 +37,7 @@ export function useToday(): TodayView {
   const db = getDb();
   return useMemo(() => {
     const at = now();
-    const todayKey = dayKeyOf(at, getDayStartHour(db));
+    const todayKey = resolveTodayKey(db, at);
     const bundle = loadDayBundle(db, todayKey);
     if (!bundle) return { todayKey, day: null, closed: false, rows: [], done: 0, total: 0, items: [] };
     const topics = listTopics(db);

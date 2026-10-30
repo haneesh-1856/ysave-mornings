@@ -2,7 +2,7 @@ import { chain, glows } from '../calendar';
 import type { Day, DayBundle, DayTask } from '../types';
 
 const day = (o: Partial<Day> = {}): Day => ({
-  dayKey: '2026-10-28', planConfirmedAt: null, closedAt: null, closedBy: null, dayStartHour: 4, ...o,
+  dayKey: '2026-10-28', planConfirmedAt: null, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4, ...o,
 });
 const dt = (id: string, completedAt: number | null): DayTask => ({
   id, dayKey: '2026-10-28', taskId: null, topicId: 't', name: id, colorKey: 'study', kind: 'check',

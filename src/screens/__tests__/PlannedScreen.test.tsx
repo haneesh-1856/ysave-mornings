@@ -50,7 +50,7 @@ function closeToday() {
     db,
     {
       closeSessions: [], completions: [], outcomes: [], insertDayTasks: [],
-      createDays: exists ? [] : [{ ...closed, planConfirmedAt: null, dayStartHour: 4 }],
+      createDays: exists ? [] : [{ ...closed, planConfirmedAt: null, planDraftedAt: null, dayStartHour: 4 }],
       closeDays: exists ? [closed] : [],
     },
     () => 'x',

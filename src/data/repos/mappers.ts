@@ -38,6 +38,7 @@ export const toTask = (r: TaskRow): Task => ({
 export const toDay = (r: DayRow): Day => ({
   dayKey: r.dayKey,
   planConfirmedAt: r.planConfirmedAt ?? null,
+  planDraftedAt: r.planDraftedAt ?? null,
   closedAt: r.closedAt ?? null,
   closedBy: r.closedBy ?? null,
   dayStartHour: r.dayStartHour,

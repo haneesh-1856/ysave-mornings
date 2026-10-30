@@ -1,14 +1,15 @@
 import { useMemo } from 'react';
 import { listDays, loadDayBundle } from '../../data/repos/days';
-import { getDayStartHour, getSetting, setSetting } from '../../data/repos/settings';
+import { getSetting, setSetting } from '../../data/repos/settings';
 import { collectionItems } from '../../domain/collection';
 import type { CollectionItem } from '../../domain/collection';
-import { addDays, dayKeyOf } from '../../domain/dayKey';
+import { addDays } from '../../domain/dayKey';
 import { dayNumber } from '../../domain/stats';
 import type { DayKey } from '../../domain/types';
 import { now } from '../clock';
 import { getDb } from '../dbRef';
 import { bump, useDataVersion } from '../store';
+import { todayKey as resolveTodayKey } from '../today';
 
 export const MORNING_SETTING = 'morningShownFor';
 
@@ -29,7 +30,7 @@ export function useMorning(): MorningView {
   const db = getDb();
   return useMemo(() => {
     const at = now();
-    const todayKey = dayKeyOf(at, getDayStartHour(db));
+    const todayKey = resolveTodayKey(db, at);
     const earlier = listDays(db, '0000-01-01', addDays(todayKey, -1));
     const shownFor = getSetting(db, MORNING_SETTING);
     const bundle = loadDayBundle(db, todayKey);
@@ -48,6 +49,6 @@ export function useMorning(): MorningView {
 export function markMorningSeen(): void {
   const db = getDb();
   const at = now();
-  setSetting(db, MORNING_SETTING, dayKeyOf(at, getDayStartHour(db)), at);
+  setSetting(db, MORNING_SETTING, resolveTodayKey(db, at), at);
   bump('settings');
 }

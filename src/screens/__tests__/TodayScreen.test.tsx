@@ -102,7 +102,7 @@ function closeToday() {
     db,
     {
       closeSessions: [], completions: [], outcomes: [], insertDayTasks: [],
-      createDays: exists ? [] : [{ ...closed, planConfirmedAt: null, dayStartHour: 4 }],
+      createDays: exists ? [] : [{ ...closed, planConfirmedAt: null, planDraftedAt: null, dayStartHour: 4 }],
       closeDays: exists ? [closed] : [],
     },
     () => 'x',
@@ -252,8 +252,12 @@ describe('Today: closed day', () => {
     expect(screen.queryByRole('button', { name: "Edit today's plan" })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Plan today' })).toBeNull();
     expect(screen.getByRole('button', { name: "See today's plan" })).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Read, 5 minutes, start' }));
-    await fireEvent.press(screen.getByRole('checkbox', { name: 'Sums' }));
+    const timed = screen.getByRole('button', { name: 'Read, 5 minutes, start' });
+    const check = screen.getByRole('checkbox', { name: 'Sums' });
+    expect(timed).toBeDisabled();
+    expect(check).toBeDisabled();
+    await fireEvent.press(timed);
+    await fireEvent.press(check);
     expect(mockPush).not.toHaveBeenCalled();
     expect(Haptics.impactAsync).not.toHaveBeenCalled();
     expect(screen.getByText('0 of 4 done')).toBeTruthy();
@@ -291,6 +295,6 @@ describe('Today: chain and Close button', () => {
     const disabled = (label: string) =>
       screen.getAllByLabelText(label).some((n) => (n.props as { accessibilityState?: { disabled?: boolean } }).accessibilityState?.disabled === true);
     expect(disabled('Read, 5 minutes, start')).toBe(true);
-    expect(disabled('Sums, not done')).toBe(true);
+    expect(disabled('Sums')).toBe(true);
   });
 });

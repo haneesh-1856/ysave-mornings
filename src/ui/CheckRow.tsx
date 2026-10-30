@@ -13,15 +13,16 @@ type Props = {
   /** Weekday the task was carried over from, already formatted (e.g. "Thursday"). */
   forwardedFrom?: string;
   onToggle: () => void;
+  disabled?: boolean;
 };
 
 /** A checklist task: Checkbox, a small marble in the topic color, and the name. */
-export function CheckRow({ name, topicColor, done, forwardedFrom, onToggle }: Props) {
+export function CheckRow({ name, topicColor, done, forwardedFrom, onToggle, disabled }: Props) {
   const t = useTheme();
   const color = t.topic(topicColor).color;
   return (
     <View style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <Checkbox checked={done} onChange={onToggle} label={name} />
+      <Checkbox checked={done} onChange={onToggle} label={name} disabled={disabled} />
       <View
         importantForAccessibility="no"
         style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: color, opacity: done ? 1 : 0.45 }}

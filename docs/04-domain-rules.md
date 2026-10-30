@@ -38,6 +38,11 @@ Rows, grouped by topic in library order:
 - Which day you can plan: **tomorrow** always. **Today** while it's open (not closed), including after its plan
   was confirmed: re-confirming keeps every row that has sessions or `completedAt`, and `planConfirmedAt` keeps its
   first value. Never a past day. *(Changed 2026-10-29, ADR-009; before, today was plannable only until confirmed.)*
+- **Draftable days (ADR-010).** Any day after tomorrow, up to a year ahead, can hold a *draft plan*: the same rows,
+  saved without `planConfirmedAt` (the day stores `planDraftedAt`). A draft is not a plan: no planning marble, the
+  day never counts as planned, and glow, chain and stats ignore it. Once the day is tomorrow, confirming it
+  finalizes the plan as usual. A draft day that arrives as today unfinalized is not topped up with defaults (§3):
+  the draft is its starting plan, and the day counts as unplanned.
 
 ## 3. Unplanned day
 

@@ -1,15 +1,15 @@
 import { useMemo } from 'react';
 import { loadDayBundle } from '../../data/repos/days';
-import { getDayStartHour } from '../../data/repos/settings';
 import { listTopics } from '../../data/repos/topics';
 import { collectionItems } from '../../domain/collection';
 import type { CollectionItem } from '../../domain/collection';
-import { addDays, dayKeyOf } from '../../domain/dayKey';
+import { addDays } from '../../domain/dayKey';
 import { focusedMs, overtimeMs } from '../../domain/timer';
 import type { ColorKey, Day, DayKey } from '../../domain/types';
 import { now } from '../clock';
 import { getDb } from '../dbRef';
 import { useDataVersion } from '../store';
+import { todayKey as resolveTodayKey } from '../today';
 
 export interface UntickedRow {
   dayTaskId: string;
@@ -37,7 +37,7 @@ export function useCloseSummary(): CloseSummary {
   const db = getDb();
   return useMemo(() => {
     const at = now();
-    const todayKey = dayKeyOf(at, getDayStartHour(db));
+    const todayKey = resolveTodayKey(db, at);
     const tomorrowKey = addDays(todayKey, 1);
     const bundle = loadDayBundle(db, todayKey);
     const base = { todayKey, tomorrowKey };

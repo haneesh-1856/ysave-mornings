@@ -70,7 +70,10 @@ function useLid(closed: boolean, enabled: boolean) {
   useEffect(() => {
     if (was.current === closed) return;
     was.current = closed;
-    if (!enabled) return;
+    if (!enabled) {
+      p.value = closed ? 1 : 0; // keep in step so enabling the prop later can't show an open lid on a closed jar
+      return;
+    }
     p.value = closed && !reduce ? animate(1) : closed ? 1 : 0;
     // `animate`/`reduce` are not triggers; `closed` is.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,7 +133,7 @@ export function Jar({ items, closed, scale = 1, animateLast = false, animateLid 
       </Svg>
       {animateLid ? (
         // The lid is its own overlay so a plain Animated.View transform swings it (no animated SVG props); drawn flat-closed, posed open by the transform.
-        <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: W, height: H }, lidStyle]}>
+        <Animated.View testID="jar-lid-overlay" pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, width: W, height: H }, lidStyle]}>
           <Svg width={W} height={H} viewBox={JAR_VIEWBOX}>
             <Rect testID={closed ? 'jar-lid-closed' : 'jar-lid-open'} x={17} y={4} width={36} height={8} rx={3} fill={closed ? t.c.accent : t.c.line} />
           </Svg>

@@ -44,6 +44,7 @@ export const tasks = sqliteTable('tasks', {
 export const days = sqliteTable('days', {
   dayKey: text('dayKey').primaryKey(),
   planConfirmedAt: integer('planConfirmedAt'),
+  planDraftedAt: integer('planDraftedAt'),
   closedAt: integer('closedAt'),
   closedBy: text('closedBy', { enum: CLOSED_BY }),
   dayStartHour: integer('dayStartHour').notNull(),

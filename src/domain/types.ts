@@ -1,5 +1,6 @@
 export type Epoch = number; // ms since 1970 UTC
 export type DayKey = string; // 'YYYY-MM-DD', local calendar date
+export type MonthKey = string; // 'YYYY-MM'
 export type TaskKind = 'timed' | 'check';
 export type ColorKey = 'study' | 'health' | 'home' | 'sun' | 'c4' | 'c5';
 export type ClosedBy = 'user' | 'auto';
@@ -32,6 +33,7 @@ export interface Task {
 export interface Day {
   dayKey: DayKey;
   planConfirmedAt: Epoch | null;
+  planDraftedAt: Epoch | null;
   closedAt: Epoch | null;
   closedBy: ClosedBy | null;
   dayStartHour: number;

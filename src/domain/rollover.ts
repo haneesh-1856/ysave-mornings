@@ -1,4 +1,4 @@
-import { addDays, dayEndOf, dayKeyOf } from './dayKey';
+import { addDays, dayEndOf } from './dayKey';
 import { prefillUnplanned } from './plan';
 import { pendingCompletions } from './timer';
 import type {
@@ -103,7 +103,7 @@ export function closeByHand(
   }
   if (next.day === null) {
     ops.createDays = [
-      { dayKey: nextKey, planConfirmedAt: null, closedAt: null, closedBy: null, dayStartHour: next.dayStartHour },
+      { dayKey: nextKey, planConfirmedAt: null, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: next.dayStartHour },
     ];
   }
   return ops;
@@ -118,15 +118,14 @@ export function closeByHand(
  * NOT covered: today's own running timed tasks. The state layer calls pendingCompletions for today.
  */
 export function rollover(input: {
-  now: Epoch;
+  todayKey: DayKey;
   dayStartHour: number;
   openDays: DayBundle[];
   today: { day: Day | null; dayTasks: DayTask[] };
   topics: Topic[];
   tasks: Task[];
 }): Ops & { todayKey: DayKey; autoClosed: DayKey[] } {
-  const { now, dayStartHour, today } = input;
-  const todayKey = dayKeyOf(now, dayStartHour);
+  const { todayKey, dayStartHour, today } = input;
   const ops = emptyOps();
   const autoClosed: DayKey[] = [];
 
@@ -144,10 +143,14 @@ export function rollover(input: {
   }
 
   // A closed today is final (doc 04 §6): never prefill it, even if it was closed before being planned.
-  if (today.day === null || (today.day.planConfirmedAt === null && today.day.closedAt === null)) {
+  // A drafted today (ADR-010) already has its starting plan: the draft rows are not topped up with defaults.
+  if (
+    today.day === null ||
+    (today.day.planConfirmedAt === null && today.day.closedAt === null && today.day.planDraftedAt === null)
+  ) {
     if (today.day === null) {
       ops.createDays.push({
-        dayKey: todayKey, planConfirmedAt: null, closedAt: null, closedBy: null, dayStartHour,
+        dayKey: todayKey, planConfirmedAt: null, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour,
       });
     }
     ops.insertDayTasks = prefillUnplanned({

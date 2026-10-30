@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getDay, loadDayBundle } from '../../data/repos/days';
-import { getDayStartHour } from '../../data/repos/settings';
 import { getTask, listTasks } from '../../data/repos/tasks';
 import { getTopic, listTopics } from '../../data/repos/topics';
-import { dayKeyOf } from '../../domain/dayKey';
 import {
   addOneOff as addOneOffTo,
   buildPlan,
   canConfirm as canConfirmDraft,
+  isDraftable,
   plannableDays,
   setCue as setCueOn,
   setTicked,
@@ -16,14 +15,19 @@ import {
 } from '../../domain/plan';
 import type { PlanDraft } from '../../domain/plan';
 import type { DayKey, Task, TaskKind } from '../../domain/types';
-import { confirmDayPlan } from '../actions/plan';
+import { confirmDayPlan, discardDayDraft, saveDayDraft } from '../actions/plan';
 import { now } from '../clock';
 import { getDb } from '../dbRef';
 import { ValidationError } from '../errors';
 import { useDataVersion } from '../store';
+import { todayKey as resolveTodayKey } from '../today';
 
 export interface PlanDraftApi {
   draft: PlanDraft | null;
+  /** 'draft' for a later day (ADR-010: Save draft / Discard), 'plan' for today or tomorrow (Confirm). */
+  mode: 'draft' | 'plan';
+  /** A draft is already saved for this day (draft mode: show "Discard draft"). */
+  hasDraft: boolean;
   plannable: boolean;
   dirty: boolean;
   totals: { count: number; minutes: number };
@@ -38,6 +42,10 @@ export interface PlanDraftApi {
    * totals or canConfirm for this mount. Throws (and does not freeze) if the confirm fails.
    */
   confirm(): void;
+  /** Draft mode: saveDayDraft(dayKey, draft). The edits stay on screen; nothing is frozen. Throws on failure. */
+  saveDraft(): void;
+  /** Draft mode: discardDayDraft(dayKey), then the screen shows the library defaults again. */
+  discardDraft(): void;
 }
 
 type Snapshot = { dayKey: DayKey; draft: PlanDraft; dirty: boolean };
@@ -49,11 +57,12 @@ type Snapshot = { dayKey: DayKey; draft: PlanDraft; dirty: boolean };
 export function usePlanDraft(dayKey: DayKey): PlanDraftApi {
   const daysVersion = useDataVersion(['days', 'settings']);
   const db = getDb();
-  const todayKey = dayKeyOf(now(), getDayStartHour(db));
+  const todayKey = resolveTodayKey(db, now());
 
-  const { plannable, base } = useMemo(() => {
-    const ok = plannableDays(todayKey, getDay(db, todayKey)).includes(dayKey);
-    if (!ok) return { plannable: false, base: null };
+  const { plannable, base, mode, hasDraft } = useMemo(() => {
+    const mode: 'draft' | 'plan' = isDraftable(todayKey, dayKey) ? 'draft' : 'plan';
+    const ok = mode === 'draft' || plannableDays(todayKey, getDay(db, todayKey)).includes(dayKey);
+    if (!ok) return { plannable: false, base: null, mode, hasDraft: false };
     const bundle = loadDayBundle(db, dayKey);
     const dayTasks = bundle?.dayTasks ?? [];
     const tasks: Task[] = listTasks(db);
@@ -69,7 +78,8 @@ export function usePlanDraft(dayKey: DayKey): PlanDraftApi {
       }
     }
     const built = buildPlan({ dayKey, topics: listTopics(db), tasks, day: bundle?.day ?? null, dayTasks });
-    return { plannable: true, base: built };
+    const day = bundle?.day;
+    return { plannable: true, base: built, mode, hasDraft: day != null && day.planDraftedAt !== null && day.planConfirmedAt === null };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dayKey, todayKey and the days version are the rebuild keys
   }, [db, dayKey, todayKey, daysVersion]);
 
@@ -99,6 +109,17 @@ export function usePlanDraft(dayKey: DayKey): PlanDraftApi {
     frozenRef.current = snap;
     setFrozen(snap); // batched with the bump('days') above, so no render shows the rebuilt base
   }, []);
+
+  const saveDraft = useCallback(() => {
+    const snap = current.current;
+    if (!snap) throw new ValidationError('dayKey', 'nothing to save');
+    saveDayDraft(snap.dayKey, snap.draft);
+  }, []);
+
+  const discardDraft = useCallback(() => {
+    discardDayDraft(dayKey);
+    setEdited(null); // the screen goes back to the rebuilt base
+  }, [dayKey]);
 
   const edit = useCallback(
     (fn: (d: PlanDraft) => PlanDraft) => {
@@ -147,6 +168,8 @@ export function usePlanDraft(dayKey: DayKey): PlanDraftApi {
 
   return {
     draft,
+    mode,
+    hasDraft,
     plannable: isPlannable,
     dirty,
     totals,
@@ -157,5 +180,7 @@ export function usePlanDraft(dayKey: DayKey): PlanDraftApi {
     addOneOff,
     canConfirm: draft != null && canConfirmDraft(draft),
     confirm,
+    saveDraft,
+    discardDraft,
   };
 }

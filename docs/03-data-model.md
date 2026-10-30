@@ -39,6 +39,7 @@ Every table has `createdAt`, `updatedAt`. Library tables also have `deletedAt` (
 |---|---|---|
 | dayKey | text PK | `YYYY-MM-DD` |
 | planConfirmedAt | integer null | set when "looks like this ✓" was pressed → planning marble exists |
+| planDraftedAt | integer null | set when a draft plan is saved for a later day (ADR-010); a draft is not a plan: no planning marble. Kept after the plan is confirmed, as history |
 | closedAt | integer null | |
 | closedBy | text null | `user` \| `auto` |
 | dayStartHour | integer | snapshot of the setting this day used (history doesn't shift if the setting changes) |

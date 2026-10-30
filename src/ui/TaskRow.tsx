@@ -17,6 +17,7 @@ type Props = {
   gold: boolean;
   onPress: () => void;
   a11yLabel: string;
+  disabled?: boolean;
 };
 
 /** The right-hand text for each state (contract). */
@@ -31,14 +32,16 @@ export function taskRowText(p: Pick<Props, 'minutes' | 'state' | 'remainingMs' |
 }
 
 /** A timed task on Today. Tapping opens Run. A live dot marks the running task. */
-export function TaskRow({ name, topicColor, minutes, state, remainingMs, overtimeMs, gold, onPress, a11yLabel }: Props) {
+export function TaskRow({ name, topicColor, minutes, state, remainingMs, overtimeMs, gold, onPress, a11yLabel, disabled = false }: Props) {
   const t = useTheme();
   const text = taskRowText({ minutes, state, remainingMs, overtimeMs });
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={a11yLabel}
-      onPress={onPress}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={disabled ? undefined : onPress}
       style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }}>
       <View importantForAccessibility="no" style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: t.topic(topicColor).color }} />
       <T numberOfLines={1} style={{ flex: 1 }} color={state === 'stopped' ? 'muted' : 'ink'}>{name}</T>

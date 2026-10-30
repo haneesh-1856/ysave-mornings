@@ -84,6 +84,18 @@ describe('animateLast', () => {
     expect(mockAnimate).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the lid in step while animateLid is off, so enabling it later shows the right lid', async () => {
+    const { rerender, getByTestId } = await renderThemed(<Jar items={[]} closed={false} />);
+    await rerender(<Jar items={[]} closed />);
+    await rerender(<Jar items={[]} closed animateLid />);
+    getByTestId('jar-lid-closed');
+    // closed lid = no lift, no rotation
+    const flat = JSON.stringify(getByTestId('jar-lid-overlay').props.style);
+    expect(flat).not.toMatch(/-14/);
+    expect(flat).not.toMatch(/-16deg/);
+    expect(mockAnimate).not.toHaveBeenCalled();
+  });
+
   it('is instant under Reduce Motion', async () => {
     mockReduce = true;
     const { getByTestId } = await renderThemed(<Jar items={[item(1)]} closed={false} animateLast />);

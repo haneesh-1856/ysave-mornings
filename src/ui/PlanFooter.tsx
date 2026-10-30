@@ -13,16 +13,22 @@ type Props = {
   canConfirm: boolean;
   busy: boolean;
   onConfirm: () => void;
+  /** Draft mode (ADR-010): the button saves a draft; disabled while nothing is ticked. */
+  draft?: boolean;
 };
 
-export function PlanFooter({ count, minutes, dayName, canConfirm, busy, onConfirm }: Props) {
+export function PlanFooter({ count, minutes, dayName, canConfirm, busy, onConfirm, draft }: Props) {
   const t = useTheme();
   return (
     <View style={{ gap: 10, padding: 16, backgroundColor: t.c.bg, borderTopWidth: 1, borderTopColor: t.c.line }}>
       <T variant="sub" weight="bold" style={{ textAlign: 'center' }}>
-        {`${count} ${count === 1 ? 'task' : 'tasks'} · ${formatMinutes(minutes)} planned`}
+        {`${count} ${count === 1 ? 'task' : 'tasks'} · ${formatMinutes(minutes)}${draft ? '' : ' planned'}`}
       </T>
-      <Button label={`${dayName} looks like this ✓`} disabled={!canConfirm || busy} onPress={onConfirm} />
+      <Button
+        label={draft ? 'Save draft' : `${dayName} looks like this ✓`}
+        disabled={!canConfirm || busy}
+        onPress={onConfirm}
+      />
     </View>
   );
 }

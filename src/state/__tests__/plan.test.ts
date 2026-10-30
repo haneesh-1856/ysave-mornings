@@ -54,7 +54,7 @@ function closeToday() {
     db,
     {
       closeSessions: [], completions: [], outcomes: [], insertDayTasks: [],
-      createDays: exists ? [] : [{ ...closed, planConfirmedAt: null, dayStartHour: 4 }],
+      createDays: exists ? [] : [{ ...closed, planConfirmedAt: null, planDraftedAt: null, dayStartHour: 4 }],
       closeDays: exists ? [closed] : [],
     },
     () => 'x',
@@ -152,11 +152,11 @@ describe('usePlanDraft', () => {
     expect(math.id).toBeTruthy();
   });
 
-  it('is not plannable for a past day or two days out: draft null', async () => {
+  it('is not plannable for a past day or beyond the draft horizon: draft null', async () => {
     seed();
     const past = await renderHook(() => usePlanDraft('2026-10-28'));
     expect(past.result.current).toMatchObject({ draft: null, plannable: false, dirty: false, canConfirm: false });
-    const far = await renderHook(() => usePlanDraft('2026-11-02'));
+    const far = await renderHook(() => usePlanDraft('2027-11-02'));
     expect(far.result.current.draft).toBeNull();
     await act(async () => {
       far.result.current.toggle('x');

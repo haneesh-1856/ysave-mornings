@@ -14,7 +14,8 @@ import { useSubmitGuard } from '@/state/hooks/useSubmitGuard';
 import { useTaskNote } from '@/state/hooks/useTaskNote';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Button } from '@/ui/Button';
-import { weekdayName, weekdayPlural } from '@/ui/dayNames';
+import { ConfirmBox } from '@/ui/ConfirmBox';
+import { monthName, weekdayName, weekdayPlural } from '@/ui/dayNames';
 import { Header } from '@/ui/Header';
 import { OneOffForm } from '@/ui/OneOffForm';
 import { PlanFooter } from '@/ui/PlanFooter';
@@ -24,6 +25,7 @@ import { T } from '@/ui/T';
 
 const DEBOUNCE_MS = 400;
 const REMOVED_TOPIC = 'Removed topic';
+const EMPTY_DRAFT = 'Tick at least one task, or discard the draft.';
 const NOT_PLANNABLE = 'You can plan today until it closes, or tomorrow.';
 
 /** Android does not lift a ScrollView above the keyboard by itself (iOS does, via Screen), so add the room. */
@@ -80,6 +82,7 @@ function PlanBody({ dayKey }: { dayKey: DayKey }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string>();
+  const [discarding, setDiscarding] = useState(false);
   const [notes, setNotes] = useState<Record<string, string>>({});
   // One hook call for the single expanded row (hooks are never called per row or conditionally).
   const expandedTaskId = plan.draft ? findRow(plan.draft, expanded)?.taskId ?? null : null;
@@ -135,6 +138,35 @@ function PlanBody({ dayKey }: { dayKey: DayKey }) {
     />
   );
 
+  const isDraft = plan.mode === 'draft';
+  const saveDraft = () => {
+    try {
+      guard.run(() => {
+        flush();
+        plan.saveDraft();
+        router.back();
+      });
+    } catch (e) {
+      if (!(e instanceof ValidationError)) throw e;
+      setError(e.message); // fallback: the button is disabled while nothing is ticked
+    }
+  };
+  const discardDraft = () => {
+    try {
+      guard.run(() => {
+        flush(); // notes belong to the library task, not the draft
+        plan.discardDraft();
+        router.back();
+      });
+    } catch (e) {
+      if (!(e instanceof ValidationError)) throw e;
+      setDiscarding(false);
+      setError(e.message);
+    }
+  };
+
+  const shownError = error ?? (isDraft && !plan.canConfirm ? EMPTY_DRAFT : undefined);
+
   const confirm = () => {
     try {
       guard.run(() => {
@@ -152,19 +184,40 @@ function PlanBody({ dayKey }: { dayKey: DayKey }) {
     <Screen
       footer={
         <>
-          {error ? <T accessibilityRole="alert" weight="bold">{error}</T> : null}
+          {shownError ? <T accessibilityRole="alert" weight="bold">{shownError}</T> : null}
           <PlanFooter
             count={plan.totals.count}
             minutes={plan.totals.minutes}
             dayName={name}
             canConfirm={plan.canConfirm}
             busy={guard.busy}
-            onConfirm={confirm}
+            onConfirm={isDraft ? saveDraft : confirm}
+            draft={isDraft}
           />
+          {isDraft && plan.hasDraft ? (
+            discarding ? (
+              <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
+                <ConfirmBox
+                  text="Discard this draft? Nothing else changes."
+                  confirmLabel="Discard"
+                  danger
+                  disabled={guard.busy}
+                  onConfirm={discardDraft}
+                  onCancel={() => setDiscarding(false)}
+                />
+              </View>
+            ) : (
+              <View style={{ alignItems: 'center', paddingBottom: 8 }}>
+                <Button label="Discard draft" kind="ghost" disabled={guard.busy} onPress={() => setDiscarding(true)} />
+              </View>
+            )
+          ) : null}
+
         </>
       }>
       <BackButton />
-      <Header title={title} />
+      <Header title={isDraft ? 'Plan ahead' : title} />
+      {isDraft ? <T variant="sub">{`${name}, ${Number(dayKey.slice(8))} ${monthName(dayKey)}`}</T> : null}
       {draft.groups.map(g => {
         const topic = topicById.get(g.topicId);
         if (g.rows.length === 0) return null;

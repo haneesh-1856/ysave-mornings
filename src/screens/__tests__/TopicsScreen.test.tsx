@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, screen } from '@testing-library/react-native';
 
 import { listTasks } from '@/data/repos/tasks';
 import { getTopic } from '@/data/repos/topics';
@@ -31,7 +31,13 @@ beforeEach(() => {
   setupState(AT);
   mockPush.mockClear();
 });
-afterEach(teardownState);
+afterEach(() => {
+  jest.useRealTimers();
+  teardownState();
+});
+
+/** Lets the 400 ms text debounce fire without real waiting. */
+const pastDebounce = () => act(async () => { jest.advanceTimersByTime(450); });
 
 describe('TopicsScreen', () => {
   it('shows the empty state and opens the new-topic form', async () => {
@@ -77,8 +83,11 @@ describe('TopicsScreen', () => {
     expect(screen.queryByLabelText('Task name')).toBeNull();
 
     await fireEvent.press(screen.getByRole('button', { name: 'Add the first task to Study' }));
+    jest.useFakeTimers();
     await fireEvent.changeText(screen.getByLabelText('Task name'), 'Read');
-    await waitFor(() => expect(saved()).toHaveLength(1), { timeout: 2000 });
+    await pastDebounce();
+    jest.useRealTimers();
+    expect(saved()).toHaveLength(1);
     expect(saved()[0]).toMatchObject({ name: 'Read', kind: 'timed', minutes: 30, repeatMask: 0, isDefault: false });
     // the card stays open on the same draft, and now edits the real task
     await fireEvent.press(screen.getByRole('switch', { name: 'Default task' }));
@@ -106,9 +115,12 @@ describe('TopicsScreen', () => {
     await renderThemed(<TopicsScreen />);
     await fireEvent.press(screen.getByRole('button', { name: /^Read,/ }));
 
+    jest.useFakeTimers();
     await fireEvent.changeText(screen.getByLabelText('Task name'), 'Read more');
     expect(saved()[0].name).toBe('Read'); // not yet: debounced
-    await waitFor(() => expect(saved()[0].name).toBe('Read more'), { timeout: 2000 });
+    await pastDebounce();
+    jest.useRealTimers();
+    expect(saved()[0].name).toBe('Read more');
 
     await fireEvent.changeText(screen.getByLabelText('Task name'), '   ');
     expect(screen.getByText('A task needs a name')).toBeTruthy();

@@ -3,7 +3,6 @@ import { applyOps } from '../../data/repos/ops';
 import { getDayStartHour } from '../../data/repos/settings';
 import { listTasks } from '../../data/repos/tasks';
 import { listTopics } from '../../data/repos/topics';
-import { dayKeyOf } from '../../domain/dayKey';
 import { rollover } from '../../domain/rollover';
 import type { Ops } from '../../domain/rollover';
 import { pendingCompletions } from '../../domain/timer';
@@ -12,6 +11,7 @@ import { now } from '../clock';
 import { getDb } from '../dbRef';
 import { newId } from '../ids';
 import { bump } from '../store';
+import { todayKey as resolveTodayKey } from '../today';
 
 function isEmpty(o: Ops): boolean {
   return (
@@ -30,11 +30,11 @@ export function reconcile(): { autoClosed: DayKey[] } {
   const db = getDb();
   const at = now();
   const dayStartHour = getDayStartHour(db);
-  const todayKey = dayKeyOf(at, dayStartHour);
+  const todayKey = resolveTodayKey(db, at);
 
   const todayBefore = loadDayBundle(db, todayKey);
   const { autoClosed, ...ops } = rollover({
-    now: at,
+    todayKey,
     dayStartHour,
     openDays: loadOpenPastDays(db, todayKey),
     today: { day: todayBefore?.day ?? null, dayTasks: todayBefore?.dayTasks ?? [] },

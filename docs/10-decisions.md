@@ -51,3 +51,13 @@ trickiest logic (day boundary, rollover, timer) is fast to test and easy to reas
 planning marble keeps its original time.
 **Trade-off:** unticking an unfinished task late in the day still lets the day glow. That follows the locked
 rule that the user is responsible for honesty; the app doesn't police it.
+
+### ADR-010 · Plan ahead with drafts (product decision, 2026-10-30)
+**Context:** in the M6 phone check the user wanted to add a plan for any later day from the Calendar, the way
+tomorrow can be planned, without that meaning the day is planned.
+**Decision:** any day after tomorrow can hold a **draft plan**. A draft is not a plan: no planning marble, no
+"planned" state. When the day becomes tomorrow, the evening's "Plan tomorrow" opens the draft and confirming it
+**finalizes** the plan as usual. If a draft day arrives without being finalized, the draft is its starting plan
+(today stays editable per ADR-009) and the day counts as unplanned.
+**Trade-off:** one more column (`days.planDraftedAt`) and a draft mode on the Plan screen; in return the existing
+plan, confirm and rollover rules stay unchanged for confirmed plans.

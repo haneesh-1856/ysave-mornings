@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
-import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { addDays } from '@/domain/dayKey';
@@ -44,10 +44,10 @@ function timedLabel(name: string, minutes: number, state: Timed, left: number, o
   }
 }
 
-type TimedProps = { row: TodayRow; at: Epoch; onOpen: (dayTaskId: string) => void };
+type TimedProps = { row: TodayRow; at: Epoch; onOpen: (dayTaskId: string) => void; disabled?: boolean };
 
 /** A timed row evaluated at a fixed instant. Only RunningRow feeds it a ticking instant. */
-function TimedRowAt({ row, at, onOpen }: TimedProps) {
+function TimedRowAt({ row, at, onOpen, disabled }: TimedProps) {
   const { dayTask, sessions, state } = row;
   if (state === 'check-open' || state === 'check-done') return null;
   const minutes = Math.round(dayTask.budgetSec / 60);
@@ -64,53 +64,40 @@ function TimedRowAt({ row, at, onOpen }: TimedProps) {
       overtimeMs={over}
       gold={gold}
       onPress={() => onOpen(dayTask.id)}
+      disabled={disabled}
       a11yLabel={timedLabel(dayTask.name, minutes, state, left, over, gold)}
     />
   );
 }
 
 /** The running row owns the 1 Hz clock and the hit-zero watcher, so nothing else re-renders each second. */
-function RunningRow({ row, onOpen }: { row: TodayRow; onOpen: (dayTaskId: string) => void }) {
+function RunningRow({ row, onOpen, disabled }: { row: TodayRow; onOpen: (dayTaskId: string) => void; disabled: boolean }) {
   const at = useNow();
   useCompletionWatcher(row);
-  return <TimedRowAt row={row} at={at} onOpen={onOpen} />;
+  return <TimedRowAt row={row} at={at} onOpen={onOpen} disabled={disabled} />;
 }
 
 const noop = () => {};
 
 const TimedRow = memo(function TimedRow({ row, onOpen, locked }: { row: TodayRow; onOpen: (id: string) => void; locked: boolean }) {
-  const inner = row.state === 'running' ? <RunningRow row={row} onOpen={onOpen} /> : <TimedRowAt row={row} at={now()} onOpen={onOpen} />;
-  if (!locked) return inner;
-  const { dayTask, sessions, state } = row;
-  const at = now();
-  const label = state === 'check-open' || state === 'check-done'
-    ? dayTask.name
-    : timedLabel(dayTask.name, Math.round(dayTask.budgetSec / 60), state, remainingMs(dayTask.budgetSec, sessions, at), overtimeMs(dayTask.budgetSec, sessions, at), isGold(dayTask.budgetSec, sessions, at));
-  return <Locked label={label}>{inner}</Locked>;
+  // A closed day's rows announce as disabled and do nothing when pressed.
+  return row.state === 'running'
+    ? <RunningRow row={row} onOpen={onOpen} disabled={locked} />
+    : <TimedRowAt row={row} at={now()} onOpen={onOpen} disabled={locked} />;
 });
-
-/** A closed day's row announces as one disabled item (the ui rows have no disabled prop). */
-function Locked({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <View accessible accessibilityLabel={label} accessibilityState={{ disabled: true }}>
-      {children}
-    </View>
-  );
-}
 
 const CheckTaskRow = memo(function CheckTaskRow({ row, onToggle, locked }: { row: TodayRow; onToggle: (id: string) => void; locked: boolean }) {
   const from = row.dayTask.forwardedFromDayKey;
-  const checkRow = (
+  return (
     <CheckRow
       name={row.dayTask.name}
       topicColor={row.dayTask.colorKey}
       done={row.state === 'check-done'}
       forwardedFrom={from ? weekdayName(from) : undefined}
       onToggle={() => onToggle(row.dayTask.id)}
+      disabled={locked}
     />
   );
-  if (!locked) return checkRow;
-  return <Locked label={`${row.dayTask.name}, ${row.state === 'check-done' ? 'done' : 'not done'}`}>{checkRow}</Locked>;
 });
 
 export default function TodayScreen() {

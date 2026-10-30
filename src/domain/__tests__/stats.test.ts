@@ -11,7 +11,7 @@ const dt = (id: string, topicId: string, completedAt: number | null): DayTask =>
   closeOutcome: null, sortOrder: 0,
 });
 const bundle = (dayTasks: DayTask[], planConfirmedAt: number | null = null): DayBundle => ({
-  day: { dayKey: '2026-10-26', planConfirmedAt, closedAt: null, closedBy: null, dayStartHour: 4 },
+  day: { dayKey: '2026-10-26', planConfirmedAt, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4 },
   dayTasks, sessionsByDayTask: {},
 });
 

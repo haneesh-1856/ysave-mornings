@@ -114,7 +114,7 @@ describe('reconcile: stale days and the day boundary', () => {
     startTask(y.id); // left running on the 26th
     applyOps(db, {
       closeSessions: [], completions: [], outcomes: [], closeDays: [], insertDayTasks: [],
-      createDays: [{ dayKey: '2026-10-27', planConfirmedAt: null, closedAt: null, closedBy: null, dayStartHour: 4 }],
+      createDays: [{ dayKey: '2026-10-27', planConfirmedAt: null, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4 }],
     }, () => 'unused', t);
     t = T0; // the 29th
     expect(reconcile().autoClosed).toEqual(['2026-10-26', '2026-10-27']);

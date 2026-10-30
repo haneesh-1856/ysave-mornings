@@ -1,4 +1,4 @@
-import { addDays, repeatsOn } from './dayKey';
+import { addDays, compareDayKeys, repeatsOn } from './dayKey';
 import { MINUTES } from './types';
 import type { ColorKey, Day, DayKey, DayTask, DayTaskDraft, Session, Task, TaskKind, Topic } from './types';
 
@@ -79,6 +79,8 @@ function libraryRow(t: Task, topic: Topic, reason: PlanReason, ticked: boolean):
  *   §3 prefill) attach to their visible library task's row by taskId: same key, reason and position,
  *   but ticked, with dayTaskId and the day row's minutes/cue/treat, so Confirm updates instead of
  *   inserting a duplicate (dayKey, taskId). One with no visible library task becomes a 'saved' row.
+ * - A draft (planDraftedAt set, planConfirmedAt null; ADR-010) is shown like a confirmed plan: its rows are
+ *   ticked, library tasks not in it are unticked, and no defaults are re-added.
  * - Confirmed plan: every existing dayTask is a ticked row (reason 'saved', or 'forwarded' if it was
  *   forwarded); library tasks not already in it appear unticked.
  * - A deleted task keeps its row only if a used dayTask refers to it (§11).
@@ -87,7 +89,7 @@ function libraryRow(t: Task, topic: Topic, reason: PlanReason, ticked: boolean):
  */
 export function buildPlan(input: PlanInput): PlanDraft {
   const { dayKey, topics, tasks, day, dayTasks } = input;
-  const confirmed = day != null && day.planConfirmedAt != null;
+  const confirmed = day != null && (day.planConfirmedAt != null || day.planDraftedAt != null);
 
   const liveTopics = topics
     .filter((t) => t.deletedAt == null)
@@ -332,6 +334,20 @@ export function confirmPlan(
 export function plannableDays(todayKey: DayKey, today: Day | null): DayKey[] {
   const tomorrow = addDays(todayKey, 1);
   return today?.closedAt != null ? [tomorrow] : [todayKey, tomorrow];
+}
+
+/** ADR-010: days after tomorrow, up to a year ahead, can hold a draft plan. Today and tomorrow use plannableDays. */
+export const DRAFT_HORIZON_DAYS = 365;
+
+export function isDraftable(todayKey: DayKey, dayKey: DayKey): boolean {
+  return (
+    compareDayKeys(dayKey, addDays(todayKey, 1)) > 0 && compareDayKeys(dayKey, addDays(todayKey, DRAFT_HORIZON_DAYS)) <= 0
+  );
+}
+
+/** Every draftable day, soonest first: [today + 2 .. today + 365]. */
+export function draftableDays(todayKey: DayKey): DayKey[] {
+  return Array.from({ length: DRAFT_HORIZON_DAYS - 1 }, (_, i) => addDays(todayKey, i + 2));
 }
 
 /**

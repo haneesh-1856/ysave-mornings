@@ -1,4 +1,4 @@
-import { addDays, compareDayKeys, dayEndOf, dayKeyOf, dayStartOf, isDayKey, repeatsOn, weekdayIndex, weekStartOf } from '../dayKey';
+import { addDays, compareDayKeys, currentDayKey, dayEndHourOf, dayEndOf, dayKeyOf, dayStartOf, isDayKey, repeatsOn, weekdayIndex, weekStartOf } from '../dayKey';
 
 const at = (y: number, mo: number, d: number, h = 0, mi = 0, s = 0, ms = 0) => new Date(y, mo - 1, d, h, mi, s, ms).getTime();
 const HOUR = 3600_000;
@@ -189,5 +189,140 @@ describe('compareDayKeys', () => {
   });
   it('throws on invalid keys', () => {
     expect(() => compareDayKeys('2026-02-30', '2026-03-01')).toThrow();
+  });
+});
+
+describe('currentDayKey (each day ends at its own snapshotted hour)', () => {
+  const rows = (snaps: Record<string, number>) => (k: string) => snaps[k];
+
+  it('equals dayKeyOf when there are no rows or all hours agree', () => {
+    const none = rows({});
+    for (const [h, t] of [[4, at(2026, 10, 30, 3, 59)], [4, at(2026, 10, 30, 4)], [0, at(2026, 10, 30)], [23, at(2026, 10, 30, 22)]] as const) {
+      expect(currentDayKey(t, h, none)).toBe(dayKeyOf(t, h));
+    }
+    const same = rows({ '2026-10-29': 4, '2026-10-30': 4 });
+    expect(currentDayKey(at(2026, 10, 30, 3, 59), 4, same)).toBe('2026-10-29');
+    expect(currentDayKey(at(2026, 10, 30, 4), 4, same)).toBe('2026-10-30');
+  });
+
+  it('4 -> 6 in the evening: today ends at the old 4, tomorrow (existing row) begins at the new 6', () => {
+    const s = rows({ '2026-10-29': 4, '2026-10-30': 6 });
+    expect(currentDayKey(at(2026, 10, 29, 22), 6, s)).toBe('2026-10-29');
+    expect(currentDayKey(at(2026, 10, 30, 3, 59), 6, s)).toBe('2026-10-29');
+    expect(currentDayKey(at(2026, 10, 30, 4), 6, s)).toBe('2026-10-30'); // old boundary: dayKeyOf(…, 6) alone says the 29th
+    expect(currentDayKey(at(2026, 10, 31, 5, 59), 6, s)).toBe('2026-10-30');
+    expect(currentDayKey(at(2026, 10, 31, 6), 6, s)).toBe('2026-10-31'); // new boundary
+  });
+
+  it('4 -> 6 with no tomorrow row: the same answers (the setting stands in)', () => {
+    const s = rows({ '2026-10-29': 4 });
+    expect(currentDayKey(at(2026, 10, 30, 3, 59), 6, s)).toBe('2026-10-29');
+    expect(currentDayKey(at(2026, 10, 30, 4), 6, s)).toBe('2026-10-30');
+    expect(currentDayKey(at(2026, 10, 31, 5, 59), 6, s)).toBe('2026-10-30');
+    expect(currentDayKey(at(2026, 10, 31, 6), 6, s)).toBe('2026-10-31');
+  });
+
+  it('4 -> 2 in the evening: today still runs until the old 4, then the new 2 applies', () => {
+    const s = rows({ '2026-10-29': 4, '2026-10-30': 2 });
+    expect(currentDayKey(at(2026, 10, 29, 22), 2, s)).toBe('2026-10-29');
+    expect(currentDayKey(at(2026, 10, 30, 2, 30), 2, s)).toBe('2026-10-29'); // dayKeyOf(…, 2) alone says the 30th
+    expect(currentDayKey(at(2026, 10, 30, 3, 59), 2, s)).toBe('2026-10-29');
+    expect(currentDayKey(at(2026, 10, 30, 4), 2, s)).toBe('2026-10-30');
+    expect(currentDayKey(at(2026, 10, 31, 1, 59), 2, s)).toBe('2026-10-30');
+    expect(currentDayKey(at(2026, 10, 31, 2), 2, s)).toBe('2026-10-31');
+  });
+
+  it('4 -> 2 with no tomorrow row gives the same answers', () => {
+    const s = rows({ '2026-10-29': 4 });
+    expect(currentDayKey(at(2026, 10, 30, 2, 30), 2, s)).toBe('2026-10-29');
+    expect(currentDayKey(at(2026, 10, 30, 4), 2, s)).toBe('2026-10-30');
+    expect(currentDayKey(at(2026, 10, 31, 2), 2, s)).toBe('2026-10-31');
+  });
+
+  it('DST spring-forward (2027-03-14, 02:00 does not exist): 4 -> 2', () => {
+    const s = rows({ '2027-03-13': 4, '2027-03-14': 2 });
+    // 03:30 EDT: the new day 2 AM has already "started" (it began at 03:00 EDT) but the 13th ends at its own 04:00.
+    expect(currentDayKey(at(2027, 3, 14, 3, 30), 2, s)).toBe('2027-03-13');
+    expect(currentDayKey(at(2027, 3, 14, 4), 2, s)).toBe('2027-03-14');
+    expect(currentDayKey(at(2027, 3, 14, 1, 59), 2, s)).toBe('2027-03-13');
+  });
+
+  it('DST spring-forward with equal hours (4): the short day still ends at 04:00 local', () => {
+    const s = rows({ '2027-03-13': 4, '2027-03-14': 4 });
+    expect(currentDayKey(at(2027, 3, 14, 3, 59), 4, s)).toBe('2027-03-13');
+    expect(currentDayKey(at(2027, 3, 14, 4), 4, s)).toBe('2027-03-14');
+  });
+
+  // Fix (Opus): a rowless yesterday ends at TODAY's row snapshot, not at the (new) setting.
+  it('rowless yesterday, existing today, 4 -> 6 at 05:30 (between the hours): today stays', () => {
+    const s = rows({ '2026-10-27': 4 }); // Mon 26th never opened; Tue row made at 05:00 under 4; setting now 6
+    expect(currentDayKey(at(2026, 10, 27, 5, 30), 6, s)).toBe('2026-10-27');
+    expect(currentDayKey(at(2026, 10, 27, 4), 6, s)).toBe('2026-10-27');
+    expect(currentDayKey(at(2026, 10, 27, 3, 59), 6, s)).toBe('2026-10-26'); // before Tue began: unchanged
+    expect(currentDayKey(at(2026, 10, 28, 3, 59), 6, s)).toBe('2026-10-27'); // Tue still ends at its own 4
+    expect(currentDayKey(at(2026, 10, 28, 4), 6, s)).toBe('2026-10-28');
+    expect(dayEndHourOf('2026-10-26', 6, s)).toBe(4);
+    expect(dayEndHourOf('2026-10-28', 6, s)).toBe(6);
+  });
+
+  it('rowless yesterday, existing today, 2 -> 4 at 03:30 (the mirror): today stays', () => {
+    const s = rows({ '2026-10-27': 2 }); // Tue row made at 03:00 under 2; setting now 4
+    expect(currentDayKey(at(2026, 10, 27, 3, 30), 4, s)).toBe('2026-10-27');
+    expect(currentDayKey(at(2026, 10, 27, 2), 4, s)).toBe('2026-10-27');
+    expect(currentDayKey(at(2026, 10, 27, 1, 59), 4, s)).toBe('2026-10-26');
+    expect(currentDayKey(at(2026, 10, 28, 1, 59), 4, s)).toBe('2026-10-27');
+    expect(currentDayKey(at(2026, 10, 28, 2), 4, s)).toBe('2026-10-28');
+  });
+
+  it('rowless yesterday, existing today, 4 -> 2 at 05:30: today stays', () => {
+    const s = rows({ '2026-10-27': 4 });
+    expect(currentDayKey(at(2026, 10, 27, 5, 30), 2, s)).toBe('2026-10-27');
+    expect(currentDayKey(at(2026, 10, 28, 3, 59), 2, s)).toBe('2026-10-27');
+    expect(currentDayKey(at(2026, 10, 28, 4), 2, s)).toBe('2026-10-28');
+  });
+
+  it('rowless today, existing tomorrow (carries the setting): same answers as with no rows', () => {
+    for (const h of [2, 4, 6]) {
+      const s = rows({ '2026-10-28': h });
+      for (const t of [at(2026, 10, 28, 1, 59), at(2026, 10, 28, 2), at(2026, 10, 28, 4), at(2026, 10, 28, 6), at(2026, 10, 28, 7)]) {
+        expect(currentDayKey(t, h, s)).toBe(dayKeyOf(t, h));
+      }
+    }
+  });
+
+  it('with no rows equals dayKeyOf for every hour, across both DST days', () => {
+    const none = rows({});
+    for (const [y, mo, d] of [[2027, 3, 14], [2026, 11, 1], [2026, 10, 30]] as const) {
+      for (let h = 0; h < 24; h++) {
+        for (let m = 0; m < 26 * 60; m += 29) {
+          const t = at(y, mo, d) + m * 60_000;
+          expect(currentDayKey(t, h, none)).toBe(dayKeyOf(t, h));
+        }
+      }
+    }
+  });
+
+  it('never skips or repeats a day, whatever mix of rows and hours (sweep)', () => {
+    const s = rows({ '2026-10-26': 6, '2026-10-28': 2, '2026-10-29': 23, '2026-10-30': 0, '2026-11-01': 4 });
+    for (const setting of [0, 4, 6, 23]) {
+      let last = currentDayKey(at(2026, 10, 25), setting, s);
+      for (let t = at(2026, 10, 25); t < at(2026, 11, 4); t += 15 * 60_000) {
+        const k = currentDayKey(t, setting, s);
+        expect([last, addDays(last, 1)]).toContain(k);
+        last = k;
+      }
+      expect(last).toBe('2026-11-03');
+    }
+  });
+
+  it('DST fall-back (2026-11-01, 01:30 happens twice): 6 -> 4 and equal hours', () => {
+    const est = (h: number, mi = 0) => Date.UTC(2026, 10, 1, h + 5, mi); // EST = UTC-5
+    const s = rows({ '2026-10-31': 6, '2026-11-01': 4 });
+    expect(currentDayKey(est(1, 30), 4, s)).toBe('2026-10-31'); // second 01:30, EST
+    expect(currentDayKey(est(5), 4, s)).toBe('2026-10-31'); // old hour 6 still runs
+    expect(currentDayKey(est(6), 4, s)).toBe('2026-11-01');
+    const same = rows({ '2026-10-31': 4, '2026-11-01': 4 });
+    expect(currentDayKey(est(3, 59), 4, same)).toBe('2026-10-31');
+    expect(currentDayKey(est(4), 4, same)).toBe('2026-11-01');
   });
 });

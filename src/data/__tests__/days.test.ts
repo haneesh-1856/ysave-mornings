@@ -3,7 +3,8 @@ import { eq } from 'drizzle-orm';
 import { buildPlan, confirmPlan, setTicked } from '../../domain/plan';
 import type { DayTask } from '../../domain/types';
 import {
-  getDay, listDays, loadDayBundle, loadOpenPastDays, saveConfirmedPlan, setCheckCompleted, setCompletedAt,
+  discardDraft, getDay, listDays, loadDayBundle, loadOpenPastDays, saveConfirmedPlan, saveDraftPlan, setCheckCompleted, setCompletedAt,
+  setFutureDayStartHour,
 } from '../repos/days';
 import { startSession, endSession } from '../repos/sessions';
 import { createTask, getTask, listTasks, softDeleteTask } from '../repos/tasks';
@@ -48,7 +49,7 @@ describe('days repo', () => {
 
     saveConfirmedPlan(db, { dayKey: DAY, dayStartHour: 6, result: planFor(db, DAY), now: 1000, newId });
     const b = loadDayBundle(db, DAY)!;
-    expect(b.day).toEqual({ dayKey: DAY, planConfirmedAt: 1000, closedAt: null, closedBy: null, dayStartHour: 6 });
+    expect(b.day).toEqual({ dayKey: DAY, planConfirmedAt: 1000, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 6 });
     expect(b.dayTasks.map((t) => t.taskId)).toEqual([dsa.id, read.id]);
     expect(b.dayTasks.map((t) => t.sortOrder)).toEqual([0, 1]);
     expect(b.dayTasks[0]).toMatchObject({ budgetSec: 3600, name: 'DSA', kind: 'timed', closeOutcome: null, completedAt: null });
@@ -159,5 +160,102 @@ describe('days repo', () => {
     const t: DayTask[] = loadDayBundle(db, DAY)!.dayTasks;
     expect(t.map((x) => x.completedAt)).toEqual([10, 20]);
     setCompletedAt(db, [], 8); // no-op
+  });
+});
+
+describe('setFutureDayStartHour', () => {
+  function seedDays() {
+    const { db } = createTestDb();
+    for (const dayKey of ['2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31']) {
+      db.insert(days).values({ dayKey, planConfirmedAt: null, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4, createdAt: 1, updatedAt: 1 }).run();
+    }
+    return db;
+  }
+
+  it('updates only rows after the key and bumps their updatedAt', () => {
+    const db = seedDays();
+    setFutureDayStartHour(db, '2026-10-29', 6, 500);
+    expect(listDays(db, '2026-10-28', '2026-10-31').map((d) => d.dayStartHour)).toEqual([4, 4, 6, 6]);
+    const rows = db.select().from(days).all();
+    expect(Object.fromEntries(rows.map((r) => [r.dayKey, r.updatedAt]))).toEqual({
+      '2026-10-28': 1, '2026-10-29': 1, '2026-10-30': 500, '2026-10-31': 500,
+    });
+  });
+
+  it('is a no-op when no row is after the key', () => {
+    const db = seedDays();
+    setFutureDayStartHour(db, '2026-10-31', 2, 500);
+    expect(listDays(db, '2026-10-28', '2026-10-31').map((d) => d.dayStartHour)).toEqual([4, 4, 4, 4]);
+  });
+
+  it('rejects hours outside 0-23 and non-integers without writing', () => {
+    const db = seedDays();
+    for (const h of [-1, 24, 2.5, NaN]) {
+      expect(() => setFutureDayStartHour(db, '2026-10-28', h, 500)).toThrow(/0-23/);
+    }
+    expect(listDays(db, '2026-10-28', '2026-10-31').map((d) => d.dayStartHour)).toEqual([4, 4, 4, 4]);
+  });
+});
+
+describe('draft plans (ADR-010)', () => {
+  const LATER = '2026-11-04';
+
+  it('saveDraftPlan writes rows and planDraftedAt, leaves planConfirmedAt null; re-saving replaces the rows', () => {
+    const { db, newId, dsa, read } = setup();
+    saveDraftPlan(db, { dayKey: LATER, dayStartHour: 6, result: planFor(db, LATER), now: 1000, newId });
+    const b = loadDayBundle(db, LATER)!;
+    expect(b.day).toEqual({ dayKey: LATER, planConfirmedAt: null, planDraftedAt: 1000, closedAt: null, closedBy: null, dayStartHour: 6 });
+    expect(b.dayTasks.map((t) => t.taskId)).toEqual([dsa.id, read.id]);
+
+    // second save: untick DSA, keep Read
+    const dsaRow = b.dayTasks[0];
+    const again = planFor(db, LATER, (d) => setTicked(d, dsaRow.id, false));
+    saveDraftPlan(db, { dayKey: LATER, dayStartHour: 6, result: again, now: 2000, newId });
+    const b2 = loadDayBundle(db, LATER)!;
+    expect(b2.dayTasks.map((t) => t.taskId)).toEqual([read.id]);
+    expect(b2.day).toMatchObject({ planConfirmedAt: null, planDraftedAt: 2000 });
+  });
+
+  it('saveDraftPlan refuses a confirmed day, a closed day, or a day with sessions, writing nothing', () => {
+    const { db, newId } = setup();
+    saveConfirmedPlan(db, { dayKey: LATER, dayStartHour: 4, result: planFor(db, LATER), now: 1, newId });
+    expect(() => saveDraftPlan(db, { dayKey: LATER, dayStartHour: 4, result: planFor(db, LATER), now: 2, newId })).toThrow(/final plan/);
+
+    const other = '2026-11-05';
+    db.insert(days).values({ dayKey: other, closedAt: 5, closedBy: 'user', dayStartHour: 4, createdAt: 1, updatedAt: 1 }).run();
+    expect(() => saveDraftPlan(db, { dayKey: other, dayStartHour: 4, result: planFor(db, other), now: 2, newId })).toThrow(/final plan/);
+
+    const third = '2026-11-06';
+    saveDraftPlan(db, { dayKey: third, dayStartHour: 4, result: planFor(db, third), now: 3, newId });
+    const row = loadDayBundle(db, third)!.dayTasks[0];
+    startSession(db, { dayTaskId: row.id, closeSessionId: null, now: 10, newId });
+    expect(() => saveDraftPlan(db, { dayKey: third, dayStartHour: 4, result: planFor(db, third), now: 4, newId })).toThrow(/progress/);
+    expect(loadDayBundle(db, third)!.day.planDraftedAt).toBe(3);
+  });
+
+  it('saveDraftPlan validates the hour', () => {
+    const { db, newId } = setup();
+    expect(() => saveDraftPlan(db, { dayKey: LATER, dayStartHour: 30, result: planFor(db, LATER), now: 1, newId })).toThrow(/0-23/);
+    expect(getDay(db, LATER)).toBeNull();
+  });
+
+  it('discardDraft removes the rows and the day row; no-draft days are left alone', () => {
+    const { db, newId } = setup();
+    saveDraftPlan(db, { dayKey: LATER, dayStartHour: 4, result: planFor(db, LATER), now: 1, newId });
+    discardDraft(db, LATER, 2);
+    expect(getDay(db, LATER)).toBeNull();
+    expect(db.select().from(dayTasks).where(eq(dayTasks.dayKey, LATER)).all()).toEqual([]);
+
+    saveConfirmedPlan(db, { dayKey: '2026-11-07', dayStartHour: 4, result: planFor(db, '2026-11-07'), now: 1, newId });
+    discardDraft(db, '2026-11-07', 2);
+    discardDraft(db, '2026-11-09', 2);
+    expect(loadDayBundle(db, '2026-11-07')!.dayTasks).toHaveLength(2);
+  });
+
+  it('discardDraft only clears the mark when the day also holds a confirmed plan or a close', () => {
+    const { db } = setup();
+    db.insert(days).values({ dayKey: LATER, planConfirmedAt: 1, planDraftedAt: 1, dayStartHour: 4, createdAt: 1, updatedAt: 1 }).run();
+    discardDraft(db, LATER, 5);
+    expect(getDay(db, LATER)).toMatchObject({ planConfirmedAt: 1, planDraftedAt: null });
   });
 });
