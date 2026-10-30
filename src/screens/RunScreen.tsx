@@ -131,7 +131,7 @@ function RunBody({ dayTask, state, sessions, topicName, note }: BodyProps) {
       </View>
       {dayTask.cue ? <T variant="sub">{`Cue: ${dayTask.cue}`}</T> : null}
       {dayTask.treat ? (
-        <View style={{ alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, backgroundColor: t.c.tint3 }}>
+        <View style={{ alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 4, borderRadius: t.radius.rb, backgroundColor: t.c.tint3 }}>
           <T variant="sub" weight="bold">{`Treat: ${dayTask.treat}`}</T>
         </View>
       ) : null}

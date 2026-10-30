@@ -5,8 +5,10 @@ import Animated, { cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat
 import type { CollectionItem } from '@/domain/collection';
 import type { DayKey } from '@/domain/types';
 import { useTheme } from '@/theme/ThemeProvider';
+import type { collectionLooks } from '@/theme/tokens';
 
 import { Collection } from './collection/Collection';
+import { unitNoun } from './collectionNoun';
 import { monthName, weekdayInitials, weekdayName } from './dayNames';
 import { T } from './T';
 import { useMotion } from './useMotion';
@@ -33,17 +35,18 @@ type Props = {
 
 const CELL_H = 58;
 const JAR_SCALE = 0.26;
+type Art = keyof typeof collectionLooks;
 const dayOfMonth = (k: DayKey) => Number(k.slice(8));
 
 /** "Thursday 22 October, today, glowing, 3 marbles" */
-export function cellLabel(c: MonthGridCell, locale?: string): string {
+export function cellLabel(c: MonthGridCell, locale?: string, art: Art = 'glass'): string {
   const parts = [`${weekdayName(c.dayKey, locale)} ${dayOfMonth(c.dayKey)} ${monthName(c.dayKey, locale)}`];
   if (c.isToday) parts.push('today');
   else if (c.isTomorrow) parts.push('tomorrow');
   if (c.glows) parts.push('glowing');
   if (c.drafted) parts.push('draft plan');
   const n = c.items.length;
-  if (n > 0) parts.push(`${n} ${n === 1 ? 'marble' : 'marbles'}`);
+  if (n > 0) parts.push(`${n} ${unitNoun(art, n)}`);
   if (c.closed) parts.push('closed');
   return parts.join(', ');
 }
@@ -59,9 +62,9 @@ function Halo() {
       p.value = 1;
       return;
     }
-    p.value = withRepeat(withTiming(0.6, { duration: 1600 }), -1, true);
+    p.value = withRepeat(withTiming(0.6, { duration: t.motion.duration * 2.5 }), -1, true);
     return () => cancelAnimation(p);
-  }, [reduce, p]);
+  }, [reduce, p, t.motion.duration]);
   const style = useAnimatedStyle(() => ({ opacity: p.value }));
   return (
     <Animated.View
@@ -86,7 +89,7 @@ function Cell({ cell, selected, onSelect, locale }: { cell: MonthGridCell; selec
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={cellLabel(cell, locale)}
+      accessibilityLabel={cellLabel(cell, locale, t.look.art)}
       accessibilityState={{ selected }}
       onPress={() => onSelect(cell.dayKey)}
       style={{ flex: 1, minHeight: CELL_H }}>

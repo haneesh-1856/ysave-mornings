@@ -1,11 +1,12 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { AccessibilityInfo } from 'react-native';
 import { create } from 'zustand';
 
 import { buildTheme, type Theme } from './buildTheme';
 import { DEFAULT_LOOK, normalizeLook, type LookMix } from './look';
 
 // The look mix lives in a small store so Profile › Look can change it from anywhere.
-// Persisting it to SQLite settings arrives with the data layer (milestone M1).
+// It is saved to SQLite settings by saveLook and loaded before the first frame by loadLook (src/state/actions/look.ts).
 type LookStore = { look: LookMix; setLook: (patch: Partial<LookMix>) => void };
 
 export const useLookStore = create<LookStore>(set => ({
@@ -15,9 +16,27 @@ export const useLookStore = create<LookStore>(set => ({
 
 const ThemeContext = createContext<Theme | null>(null);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const look = useLookStore(s => s.look);
-  const theme = useMemo(() => buildTheme(look), [look]);
+/** iOS "Reduce Transparency": cards drop the blur and keep the frost tint. Android reports false. */
+function useReduceTransparency(): boolean {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    let live = true;
+    AccessibilityInfo.isReduceTransparencyEnabled?.().then(v => live && setOn(v), () => {});
+    const sub = AccessibilityInfo.addEventListener('reduceTransparencyChanged', setOn);
+    return () => {
+      live = false;
+      sub.remove();
+    };
+  }, []);
+  return on;
+}
+
+/** `look` overrides the saved look for its subtree (the Look screen's mini preview). */
+export function ThemeProvider({ children, look: override }: { children: ReactNode; look?: LookMix }) {
+  const saved = useLookStore(s => s.look);
+  const look = override ?? saved;
+  const reduceTransparency = useReduceTransparency();
+  const theme = useMemo(() => buildTheme(look, { reduceTransparency }), [look, reduceTransparency]);
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }
 

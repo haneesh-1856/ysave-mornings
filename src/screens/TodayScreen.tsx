@@ -16,9 +16,12 @@ import { usePlannableDays } from '@/state/hooks/usePlannableDays';
 import { useCompletionWatcher } from '@/state/hooks/useRunTask';
 import { useToday } from '@/state/hooks/useToday';
 import type { TodayRow } from '@/state/hooks/useToday';
+import { useTheme } from '@/theme/ThemeProvider';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Chain } from '@/ui/Chain';
+import { Collection } from '@/ui/collection/Collection';
+import { collectionNoun } from '@/ui/collectionNoun';
 import { CheckRow } from '@/ui/CheckRow';
 import { weekdayName } from '@/ui/dayNames';
 import { Dock } from '@/ui/Dock';
@@ -138,9 +141,15 @@ export default function TodayScreen() {
 
   const canEditToday = days.includes(todayKey) && !closed;
   const empty = rows.length === 0;
+  const { layout, art } = useTheme().look;
+  const noun = collectionNoun(art);
+  const n = items.length;
+  const goClose = () => router.push('/close');
+  const showClose = !closed && !empty;
+  const closeButton = showClose ? <Button label="Close today" kind="ghost" onPress={goClose} /> : null;
 
   return (
-    <Screen tabs footer={<Dock items={items} closed={closed} />}>
+    <Screen tabs footer={layout === 'dock' ? <Dock items={items} closed={closed} onClose={showClose ? goClose : undefined} /> : undefined}>
       <Chain links={chain} />
       <Header title="Today" note={empty ? undefined : `${done} of ${total} done`} />
       {closed ? (
@@ -149,7 +158,12 @@ export default function TodayScreen() {
           <T variant="sub">It is read-only now.</T>
         </Card>
       ) : null}
-      {!closed && !empty ? <Button label="Close today" kind="ghost" onPress={() => router.push('/close')} /> : null}
+      {layout === 'hero' ? (
+        <View style={{ alignItems: 'center', gap: 2 }}>
+          <Collection items={items} closed={closed} scale={1} animateLast />
+          <T variant="sub">{`${n} in today's ${noun}`}</T>
+        </View>
+      ) : null}
       {canEditToday && !todayPlanned ? <Button label="Plan today" onPress={() => plan(todayKey)} /> : null}
       {todayPlanned ? (
         <Card>
@@ -194,6 +208,16 @@ export default function TodayScreen() {
           </Fold>
         );
       })}
+      {layout === 'hero' ? closeButton : null}
+      {layout === 'corner' ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          {closeButton}
+          <View style={{ marginLeft: 'auto', alignItems: 'flex-end' }}>
+            <T variant="label" importantForAccessibility="no">{`Today's ${noun} · ${n}`}</T>
+            <Collection items={items} closed={closed} scale={0.62} animateLast />
+          </View>
+        </View>
+      ) : null}
     </Screen>
   );
 }

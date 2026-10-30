@@ -3,11 +3,12 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useMigrations } from 'drizzle-orm/expo-sqlite/migrator';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { db, migrations } from '@/data/db';
 import { useMorningRedirect } from '@/screens/useMorningRedirect';
+import { loadLook } from '@/state/actions/look';
 import { setDb } from '@/state/dbRef';
 import { useDayBoundary } from '@/state/hooks/useDayBoundary';
 import { useReconcileOnForeground } from '@/state/hooks/useReconcileOnForeground';
@@ -57,7 +58,13 @@ export default function RootLayout() {
   const { success: migrated, error: migrationError } = useMigrations(db, migrations);
   const fontsReady = fontsLoaded || !!fontError; // if fonts fail, the system font still renders
   if (migrated) setDb(db); // before any screen renders, so hooks can call getDb()
-  const ready = fontsReady && (migrated || !!migrationError);
+  const [lookLoaded, setLookLoaded] = useState(false);
+  // The splash stays up until the saved look is in the store, so no frame shows the default look.
+  if (migrated && !lookLoaded) {
+    loadLook();
+    setLookLoaded(true);
+  }
+  const ready = fontsReady && (migrationError ? true : lookLoaded);
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();

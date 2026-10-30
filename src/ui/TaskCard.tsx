@@ -7,6 +7,7 @@ import { useTheme } from '@/theme/ThemeProvider';
 
 import { Button } from './Button';
 import { ChipSet } from './ChipSet';
+import { unitNoun } from './collectionNoun';
 import { ConfirmBox } from './ConfirmBox';
 import { CUES, TREATS } from './presets';
 import { repeatText } from './repeatText';
@@ -123,6 +124,7 @@ function Back({ value, onDone, onName, onNote, onChange, onDelete }: Omit<Props,
   const [note, setNote] = useState(value.note);
   const [touched, setTouched] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const units = unitNoun(useTheme().look.art, 2);
   const timed = value.kind === 'timed';
   const blank = name.trim().length === 0;
 
@@ -175,7 +177,7 @@ function Back({ value, onDone, onName, onNote, onChange, onDelete }: Omit<Props,
       {confirming ? (
         <ConfirmBox
           danger
-          text={`Delete ${name.trim() || 'this task'}? Past days keep their marbles.`}
+          text={`Delete ${name.trim() || 'this task'}? Past days keep their ${units}.`}
           confirmLabel="Delete"
           onConfirm={onDelete}
           onCancel={() => setConfirming(false)}

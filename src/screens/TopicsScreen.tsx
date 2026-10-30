@@ -7,7 +7,9 @@ import { updateTopic } from '@/state/actions/library';
 import { useTopicsLibrary, type TopicEntry } from '@/state/hooks/useTopicsLibrary';
 import { useTheme } from '@/theme/ThemeProvider';
 import { Button } from '@/ui/Button';
+
 import { Card } from '@/ui/Card';
+import { unitNoun } from '@/ui/collectionNoun';
 import { Fold } from '@/ui/Fold';
 import { formatMinutes } from '@/ui/formatMinutes';
 import { Header } from '@/ui/Header';
@@ -55,6 +57,7 @@ export function TopicsScreen() {
     updateTopic(e.topic.id, { isOpen: !e.topic.isOpen });
   };
 
+  const art = useTheme().look.art;
   const count = topics.length;
   return (
     <Screen tabs>
@@ -66,7 +69,7 @@ export function TopicsScreen() {
         </Card>
       ) : (
         <>
-          <T variant="sub">Tap a task to flip it. Dots are this week&apos;s marbles.</T>
+          <T variant="sub">Tap a task to flip it. {`Dots are this week's ${unitNoun(art, 2)}.`}</T>
           {topics.map(e => (
             <TopicFold
               key={e.topic.id}
@@ -119,7 +122,7 @@ function TopicFold({ entry, flipped, draft, onToggle, onFlip, onAdd, onCreated }
       right={
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           {dots > 0 ? (
-            <View accessibilityLabel={`${weekDots.length} marbles this week`} accessible style={{ flexDirection: 'row', gap: 3 }}>
+            <View accessibilityLabel={`${weekDots.length} ${unitNoun(t.look.art, weekDots.length)} this week`} accessible style={{ flexDirection: 'row', gap: 3 }}>
               {weekDots.slice(0, dots).map((d, i) => (
                 <View key={d.dayTaskId ?? `p${i}`} style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
               ))}

@@ -69,6 +69,7 @@ export default function CalendarScreen() {
     setView({ anchor: today, month, selected });
   }
   const cal = useCalendarMonth(month);
+  const art = useTheme().look.art;
   const shownMonth = cal.month;
   const sel = selected;
   const card = useDayCard(sel);
@@ -126,7 +127,7 @@ export default function CalendarScreen() {
       </GestureDetector>
       <DayCard
         title={cardTitle(sel)}
-        line={dayCardLine(card, weekdayName(sel))}
+        line={dayCardLine(card, weekdayName(sel), art)}
         items={card.items}
         closed={card.closed}
         glows={card.glows}

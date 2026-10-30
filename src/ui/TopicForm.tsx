@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import type { ColorKey } from '@/domain/types';
+import { useTheme } from '@/theme/ThemeProvider';
 
 import { Button } from './Button';
+import { unitNoun } from './collectionNoun';
 import { ColorSwatches } from './ColorSwatches';
 import { ConfirmBox } from './ConfirmBox';
 import { Fold } from './Fold';
@@ -31,6 +33,7 @@ export function TopicForm({ initialName, initialColor, onSave, onRemove, error, 
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState<ColorKey>(initialColor);
   const [asking, setAsking] = useState(false);
+  const units = unitNoun(useTheme().look.art, 2);
   const blank = name.trim().length === 0;
 
   return (
@@ -58,7 +61,7 @@ export function TopicForm({ initialName, initialColor, onSave, onRemove, error, 
         asking ? (
           <ConfirmBox
             danger
-            text={`Remove ${initialName}? Removes its tasks from your library. Past days keep their marbles.`}
+            text={`Remove ${initialName}? Removes its tasks from your library. Past days keep their ${units}.`}
             confirmLabel="Remove"
             disabled={busy}
             onConfirm={onRemove}

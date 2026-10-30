@@ -20,7 +20,7 @@ export function Card({ children, style, radius }: Props) {
         <View style={[StyleSheet.absoluteFill, { top: 3, left: 3, right: -3, bottom: -3, borderRadius: r, backgroundColor: t.hardShadow }]} />
       ) : null}
       <View style={[{ borderRadius: r, overflow: t.glass ? 'hidden' : 'visible' }, t.card, styles.pad, flattenInner(style)]}>
-        {t.glass ? (
+        {t.glass?.blur ? (
           <BlurView
             style={StyleSheet.absoluteFill}
             intensity={t.glass.intensity}

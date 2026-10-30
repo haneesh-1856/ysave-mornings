@@ -11,7 +11,9 @@ import { useSubmitGuard } from '@/state/hooks/useSubmitGuard';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { CloseSummary } from '@/ui/CloseSummary';
+import { useTheme } from '@/theme/ThemeProvider';
 import { Collection } from '@/ui/collection/Collection';
+import { collectionNoun } from '@/ui/collectionNoun';
 import { weekdayName } from '@/ui/dayNames';
 import { Header } from '@/ui/Header';
 import { OutcomePicker } from '@/ui/OutcomePicker';
@@ -24,6 +26,8 @@ const MISSING_COLOR = '#d4574e'; // same alert red as Button's danger kind
 
 export default function CloseScreen() {
   const s = useCloseSummary();
+  const t = useTheme();
+  const noun = collectionNoun(t.look.art);
   const guard = useSubmitGuard();
   const [outcomes, setOutcomes] = useState<Record<string, CloseOutcome>>({});
   const [missing, setMissing] = useState<string[]>([]);
@@ -77,7 +81,7 @@ export default function CloseScreen() {
           <CloseSummary done={s.done} total={s.total} focusedMs={s.focusedMs} extraMs={s.extraMs} />
           {s.closed ? (
             <>
-              <T weight="bold">{justClosed ? 'Jar closed' : 'Today is closed'}</T>
+              <T weight="bold">{justClosed ? `${noun.charAt(0).toUpperCase()}${noun.slice(1)} closed` : 'Today is closed'}</T>
               <Button label="Plan tomorrow" onPress={planTomorrow} />
               <Button label="Back to Today" kind="ghost" onPress={goToday} />
             </>
@@ -91,7 +95,7 @@ export default function CloseScreen() {
                       key={u.dayTaskId}
                       testID={missing.includes(u.dayTaskId) ? 'outcome-missing' : undefined}
                       style={{
-                        gap: 8, padding: 8, borderRadius: 12, borderWidth: 2,
+                        gap: 8, padding: 8, borderRadius: t.radius.r, borderWidth: 2,
                         borderColor: missing.includes(u.dayTaskId) ? MISSING_COLOR : 'transparent',
                       }}>
                       <OutcomePicker
@@ -106,7 +110,7 @@ export default function CloseScreen() {
                 </Card>
               ) : null}
               {message ? <T accessibilityRole="alert" style={{ color: MISSING_COLOR }}>{message}</T> : null}
-              <Button label="Close the jar" disabled={guard.busy} onPress={close} />
+              <Button label={`Close the ${noun}`} disabled={guard.busy} onPress={close} />
               <Button label="Not yet" kind="ghost" onPress={goToday} />
             </>
           )}

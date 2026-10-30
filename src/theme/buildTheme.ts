@@ -21,7 +21,7 @@ const pct = (s: string) => parseFloat(s);
 // expo-blur intensity (1–100) that roughly matches the prototype's CSS blur radius.
 const blurIntensity = (px: string) => Math.min(100, Math.round(pct(px) * 2.5));
 
-export function buildTheme(look: LookMix) {
+export function buildTheme(look: LookMix, opts: { reduceTransparency?: boolean } = {}) {
   const { name: _name, ...c } = palettes[look.pal];
   const shape = shapes[look.shape];
   const motion = motions[look.motion];
@@ -54,7 +54,7 @@ export function buildTheme(look: LookMix) {
     card,
     /** Outline surfaces get a hard 3/3 ink shadow drawn as a second layer. */
     hardShadow: look.surf === 'outline' ? c.ink : null,
-    glass: isGlass ? { blobs, frost, intensity: blurIntensity(glassBlurs[look.gblur].px) } : null,
+    glass: isGlass ? { blobs, frost, intensity: blurIntensity(glassBlurs[look.gblur].px), blur: !opts.reduceTransparency } : null,
     chain,
     selected: withAlpha(c.accent, 0.16),
     glow: { fill: withAlpha(c.sun, 0.38), ring: withAlpha(c.sun, 0.55) },

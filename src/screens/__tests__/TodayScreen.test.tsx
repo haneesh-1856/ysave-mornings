@@ -8,10 +8,12 @@ import { dayStartOf } from '@/domain/dayKey';
 import type { PlanDraft, PlanRow } from '@/domain/plan';
 import { createTask, createTopic } from '@/state/actions/library';
 import { confirmDayPlan } from '@/state/actions/plan';
+import { saveLook } from '@/state/actions/look';
 import { pauseTask, startTask } from '@/state/actions/run';
 import { setClockOverride } from '@/state/clock';
 import { getDb } from '@/state/dbRef';
 import { setupState, teardownState } from '@/state/testSupport';
+import { DEFAULT_LOOK } from '@/theme/look';
 import { renderThemed } from '@/ui/testing';
 
 import type { TaskRow as TaskRowType } from '../../ui/TaskRow';
@@ -296,5 +298,108 @@ describe('Today: chain and Close button', () => {
       screen.getAllByLabelText(label).some((n) => (n.props as { accessibilityState?: { disabled?: boolean } }).accessibilityState?.disabled === true);
     expect(disabled('Read, 5 minutes, start')).toBe(true);
     expect(disabled('Sums')).toBe(true);
+  });
+});
+
+describe('Today: layouts and nouns', () => {
+  afterEach(() => act(async () => saveLook(DEFAULT_LOOK)));
+  const at = (name: string | RegExp) => {
+    // Document order of the labels and texts on screen.
+    const out: string[] = [];
+    const walk = (n: unknown) => {
+      if (typeof n === 'string') out.push(n);
+      else if (n && typeof n === 'object') {
+        const node = n as { props?: { accessibilityLabel?: string }; children?: unknown[] | null };
+        if (node.props?.accessibilityLabel) out.push(node.props.accessibilityLabel);
+        node.children?.forEach(walk);
+      }
+    };
+    walk(screen.toJSON());
+    const text = out.join('|');
+    const m = typeof name === 'string' ? text.indexOf(name) : text.search(name);
+    expect(m).toBeGreaterThan(-1);
+    return m;
+  };
+  const closeBtn = (name: string) => screen.queryByRole('button', { name });
+
+  it('dock: collection in the footer with its label, count and a small Close', async () => {
+    plan(TODAY);
+    await renderThemed(<TodayScreen />);
+    expect(screen.getByText("Today's jar")).toBeTruthy();
+    expect(screen.getByText(/^\d+ marbles?$/)).toBeTruthy();
+    expect(at('Jar with ')).toBeGreaterThan(at('Read, 5 minutes, start'));
+    expect(screen.getByText('Close')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Close today' }));
+    expect(mockPush).toHaveBeenCalledWith('/close');
+  });
+
+  it('dock: no Close when closed or empty', async () => {
+    const view = await renderThemed(<TodayScreen />);
+    expect(closeBtn('Close today')).toBeNull();
+    expect(screen.getByText("Today's jar")).toBeTruthy();
+    await view.unmount();
+    plan(TODAY);
+    closeToday();
+    await renderThemed(<TodayScreen />);
+    expect(closeBtn('Close today')).toBeNull();
+  });
+
+  it('corner: no dock; label and small collection after the list, ghost Close on the left', async () => {
+    await act(async () => saveLook({ layout: 'corner', art: 'garden' }));
+    plan(TODAY);
+    await renderThemed(<TodayScreen />);
+    expect(screen.queryByText('Close')).toBeNull();
+    expect(screen.getByText(/Today's garden · \d+/)).toBeTruthy();
+    const list = at('Read, 5 minutes, start');
+    expect(at(/Today's garden · \d+/)).toBeGreaterThan(list);
+    expect(at('Garden with ')).toBeGreaterThan(list);
+    expect(at('Close today')).toBeLessThan(at(/Today's garden · \d+/));
+    await fireEvent.press(screen.getByRole('button', { name: 'Close today' }));
+    expect(mockPush).toHaveBeenCalledWith('/close');
+  });
+
+  it('corner: no Close when closed or empty', async () => {
+    await act(async () => saveLook({ layout: 'corner' }));
+    const view = await renderThemed(<TodayScreen />);
+    expect(closeBtn('Close today')).toBeNull();
+    await view.unmount();
+    plan(TODAY);
+    closeToday();
+    await renderThemed(<TodayScreen />);
+    expect(closeBtn('Close today')).toBeNull();
+  });
+
+  it('hero: big collection under the header, then the list, then Close today', async () => {
+    await act(async () => saveLook({ layout: 'hero', art: 'card' }));
+    plan(TODAY);
+    await renderThemed(<TodayScreen />);
+    expect(screen.getByText(/^\d+ in today's stamp card$/)).toBeTruthy();
+    const list = at('Read, 5 minutes, start');
+    expect(at('Stamp card with ')).toBeLessThan(list);
+    expect(at('Close today')).toBeGreaterThan(list);
+    await fireEvent.press(screen.getByRole('button', { name: 'Close today' }));
+    expect(mockPush).toHaveBeenCalledWith('/close');
+  });
+
+  it('hero: no Close when closed', async () => {
+    await act(async () => saveLook({ layout: 'hero' }));
+    plan(TODAY);
+    closeToday();
+    await renderThemed(<TodayScreen />);
+    expect(closeBtn('Close today')).toBeNull();
+    expect(screen.getByLabelText(/^Jar with \d+ marbles?, closed$/)).toBeTruthy();
+  });
+
+  it('dock copy follows the look: sky and stamp card', async () => {
+    await act(async () => saveLook({ art: 'sky' }));
+    plan(TODAY);
+    const view = await renderThemed(<TodayScreen />);
+    expect(screen.getByText("Today's sky")).toBeTruthy();
+    expect(screen.getByText(/^\d+ stars?$/)).toBeTruthy();
+    await view.unmount();
+    await act(async () => saveLook({ art: 'card' }));
+    await renderThemed(<TodayScreen />);
+    expect(screen.getByText("Today's stamp card")).toBeTruthy();
+    expect(screen.getByText(/^\d+ stamps?$/)).toBeTruthy();
   });
 });
