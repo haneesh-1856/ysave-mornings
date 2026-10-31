@@ -119,6 +119,13 @@ describe('MonthGrid', () => {
     getByLabelText('Friday 9 October');
   });
 
+  it('gives each day button at least a 44 pt target: tall enough, and side slop for narrow phones', async () => {
+    const { getByLabelText } = await renderThemed(<MonthGrid weeks={weeks} selected="2026-10-07" onSelect={() => {}} locale="en-US" />);
+    const day = getByLabelText('Friday 9 October');
+    expect(StyleSheet.flatten(day.props.style).minHeight).toBeGreaterThanOrEqual(44);
+    expect(day.props.hitSlop).toEqual({ left: 3, right: 3 });
+  });
+
   it('builds the contract label', () => {
     expect(cellLabel(cell('2026-10-22', { glows: true, items: [item(1), item(2), item(3)] }), 'en-US')).toBe('Thursday 22 October, glowing, 3 marbles');
   });

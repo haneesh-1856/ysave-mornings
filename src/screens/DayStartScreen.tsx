@@ -14,7 +14,11 @@ import { HourPicker } from '@/ui/HourPicker';
 import { Screen } from '@/ui/Screen';
 import { T } from '@/ui/T';
 
-const goBack = () => router.back();
+/** Falls back to Today when there is no history (e.g. opened by a deep link). */
+const goBack = () => {
+  if (router.canGoBack()) router.back();
+  else router.replace('/today');
+};
 
 /**
  * The explanation, true for any chosen hour: a clock time just before the day starts belongs to the day before.
@@ -72,7 +76,7 @@ export function DayStartScreen() {
       <Card>
         <HourPicker value={draft} onChange={choose} />
       </Card>
-      {error ? <T accessibilityLiveRegion="polite" style={{ color: '#d4574e' }}>{error}</T> : null}
+      {error ? <T accessibilityLiveRegion="polite" color="danger">{error}</T> : null}
       {endHour !== draft ? (
         <T variant="sub" accessibilityLiveRegion="polite">{`Today still ends at ${hourText(endHour)}. From tomorrow, each day ends at ${hourText(draft)}.`}</T>
       ) : null}

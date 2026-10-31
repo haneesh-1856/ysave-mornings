@@ -1,0 +1,67 @@
+# Golden path: onboard -> plan today -> start a task -> back -> close -> plan tomorrow.
+# Needs a development or preview build installed (not Expo Go). See .maestro/README.md.
+appId: com.han1856.ysavemornings
+---
+- launchApp:
+    clearState: true
+
+# Welcome
+- tapOn:
+    id: onboarding-start
+# Day-start hour (default is fine)
+- tapOn:
+    id: onboarding-next
+# First topic
+- tapOn:
+    id: onboarding-topic
+- inputText: Study
+- hideKeyboard
+- tapOn:
+    id: onboarding-next
+# First task, 15 minutes
+- tapOn:
+    id: onboarding-task
+- inputText: Read
+- hideKeyboard
+- tapOn: "15"
+- tapOn:
+    id: onboarding-next
+# Ready
+- assertVisible: "Ready"
+- tapOn:
+    id: onboarding-finish
+
+# Plan today, confirm the plan
+- tapOn:
+    id: plan-confirm
+
+# Planned screen
+- tapOn:
+    id: planned-done
+
+# Today: start the task
+- assertVisible: "Today"
+- tapOn:
+    id: task-row
+    index: 0
+- tapOn:
+    id: run-start
+- tapOn:
+    id: run-back
+
+# Close the day (the task is not ticked: pick an outcome if asked)
+- tapOn:
+    id: today-close
+- tapOn:
+    text: "Let it go"
+    optional: true
+- tapOn:
+    id: close-confirm
+
+# Plan tomorrow
+- tapOn:
+    id: close-plan-tomorrow
+- tapOn:
+    id: plan-confirm
+- assertVisible:
+    id: planned-done

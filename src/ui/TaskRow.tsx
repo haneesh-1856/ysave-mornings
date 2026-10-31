@@ -37,6 +37,7 @@ export function TaskRow({ name, topicColor, minutes, state, remainingMs, overtim
   const text = taskRowText({ minutes, state, remainingMs, overtimeMs });
   return (
     <Pressable
+      testID="task-row"
       accessibilityRole="button"
       accessibilityLabel={a11yLabel}
       accessibilityState={{ disabled }}

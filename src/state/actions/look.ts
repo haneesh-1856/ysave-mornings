@@ -1,6 +1,6 @@
 import { getSetting, setSetting } from '../../data/repos/settings';
 import { normalizeFavourites, recordFavourite, setPinned, type LookFavourite } from '../../theme/favourites';
-import { normalizeLook, type LookMix } from '../../theme/look';
+import { DEFAULT_LOOK, normalizeLook, type LookMix } from '../../theme/look';
 import { useLookStore } from '../../theme/ThemeProvider';
 import { now } from '../clock';
 import { getDb } from '../dbRef';
@@ -8,18 +8,31 @@ import { newId } from '../ids';
 import { bump } from '../store';
 
 const LOOK_KEY = 'look';
+const BLUR_CHOSEN_KEY = 'gblurChosen';
+
+type SaveOpts = {
+  /** The user explicitly confirmed a blur level (Profile > Color & glass): counts as a choice even when the level is unchanged. */
+  chooseBlur?: boolean;
+};
 
 /** Applies and saves a change to the look mix; unknown keys and values are dropped (normalizeLook). */
-export function saveLook(patch: Partial<LookMix>): void {
-  const next = normalizeLook({ ...useLookStore.getState().look, ...patch });
+export function saveLook(patch: Partial<LookMix>, opts: SaveOpts = {}): void {
+  const { look, blurChosen } = useLookStore.getState();
+  const next = normalizeLook({ ...look, ...patch });
+  // "Chosen" = an explicit blur confirm, or the blur level actually changed by this save (a favourite that keeps the same level does not count).
+  const chosen = blurChosen || !!opts.chooseBlur || next.gblur !== look.gblur;
   setSetting(getDb(), LOOK_KEY, next, now());
-  useLookStore.setState({ look: next });
+  if (chosen && !blurChosen) setSetting(getDb(), BLUR_CHOSEN_KEY, true, now());
+  useLookStore.setState({ look: next, blurChosen: chosen });
   bump('settings');
 }
 
 /** Startup: puts the saved look in the store (absent or corrupt -> default, field by field). */
 export function loadLook(): void {
-  useLookStore.setState({ look: normalizeLook(getSetting(getDb(), LOOK_KEY)) });
+  const look = normalizeLook(getSetting(getDb(), LOOK_KEY));
+  // A saved level other than the default can only have come from the user, even if the flag is missing.
+  const blurChosen = getSetting(getDb(), BLUR_CHOSEN_KEY) === true || look.gblur !== DEFAULT_LOOK.gblur;
+  useLookStore.setState({ look, blurChosen });
 }
 
 const FAVOURITES_KEY = 'lookFavourites';
@@ -33,9 +46,10 @@ function writeFavourites(list: LookFavourite[]): void {
   bump('settings');
 }
 
-/** Saves the change (saveLook) and remembers the resulting look as a favourite (moved to the top if already there). */
-export function confirmLook(patch: Partial<LookMix>): void {
-  saveLook(patch);
+/** Saves the change (saveLook) and remembers the resulting look as a favourite (moved to the top if already there).
+ *  `chooseBlur`: the user confirmed a blur level, which turns off the low-end default even if the level is unchanged. */
+export function confirmLook(patch: Partial<LookMix>, opts: SaveOpts = {}): void {
+  saveLook(patch, opts);
   writeFavourites(recordFavourite(readFavourites(), useLookStore.getState().look, now(), newId));
 }
 

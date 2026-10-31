@@ -19,6 +19,7 @@ export function Checkbox({ checked, onChange, label, disabled = false }: Props) 
       style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
       <T
         importantForAccessibility="no"
+        maxFontSizeMultiplier={1} // the ✓ sits in a fixed 26 pt box; the 44 pt target and the row text still scale
         weight="extrabold"
         style={{
           width: 26, height: 26, borderRadius: 8, borderWidth: 2, textAlign: 'center', lineHeight: 22, overflow: 'hidden',

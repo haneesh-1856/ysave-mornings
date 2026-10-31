@@ -17,9 +17,10 @@ let mockN = 0;
 jest.mock('@/state/ids', () => ({ newId: () => `id-${++mockN}` }));
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
 let mockParam = '2026-10-30';
 jest.mock('expo-router', () => ({
-  router: { replace: (...a: unknown[]) => mockReplace(...a), back: () => mockBack() },
+  router: { replace: (...a: unknown[]) => mockReplace(...a), back: () => mockBack(), canGoBack: () => mockCanGoBack() },
   useLocalSearchParams: () => ({ dayKey: mockParam }),
 }));
 jest.mock('@/ui/useMotion', () => ({ useMotion: () => ({ reduce: true, animate: (to: number) => to }) }));
@@ -30,7 +31,8 @@ jest.mock('react-native-safe-area-context', () => ({
 const AT = Date.UTC(2026, 9, 29, 12, 0, 0); // Thursday 29 Oct; tomorrow is Friday 30 Oct
 const ALL_DAYS = 0b1111111;
 const MON_ONLY = 0b0000001; // not on Fridays
-const MESSAGE = 'You can plan today until it closes, or tomorrow.';
+const MESSAGE =
+  'You can plan today until it closes, or tomorrow. Days further out can be drafted from the Calendar with "Plan ahead".';
 
 function seed() {
   const study = createTopic({ name: 'Study', colorKey: 'study' });
@@ -45,6 +47,7 @@ beforeEach(() => {
   mockParam = '2026-10-30';
   mockReplace.mockClear();
   mockBack.mockClear();
+  mockCanGoBack.mockReturnValue(true);
 });
 afterEach(teardownState);
 
@@ -103,6 +106,16 @@ describe('PlanScreen', () => {
     expect(screen.getByText(MESSAGE)).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
     expect(mockBack).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('Back with no history (Plan opened by replace) goes to Today', async () => {
+    seed();
+    mockCanGoBack.mockReturnValue(false);
+    await renderThemed(<PlanScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith('/today');
   });
 
   it('shows the message for a closed today', async () => {
@@ -219,6 +232,7 @@ describe('PlanScreen', () => {
       expect(screen.getByRole('button', { name: 'Save draft' })).toBeTruthy();
       expect(screen.queryByRole('button', { name: /looks like this/ })).toBeNull();
       expect(screen.queryByRole('button', { name: 'Discard draft' })).toBeNull(); // nothing saved yet
+      expect(screen.getByText('A draft is saved for later. You confirm it the evening before.')).toBeTruthy();
       expect(screen.queryByText(/planned$/)).toBeNull();
     });
 
@@ -235,6 +249,18 @@ describe('PlanScreen', () => {
       expect(getDay(getDb(), LATER)?.planDraftedAt).not.toBeNull();
     });
 
+    it('Save draft with no history (cold deep link) goes to Today', async () => {
+      seed();
+      mockParam = LATER;
+      mockCanGoBack.mockReturnValue(false);
+      await renderThemed(<PlanScreen />);
+      await fireEvent.press(screen.getByRole('button', { name: 'Save draft' }));
+      expect(mockBack).not.toHaveBeenCalled();
+      expect(mockReplace).toHaveBeenCalledTimes(1);
+      expect(mockReplace).toHaveBeenCalledWith('/today');
+      expect(getDay(getDb(), LATER)?.planDraftedAt).not.toBeNull();
+    });
+
     it('Save draft is disabled while nothing is ticked', async () => {
       seed();
       mockParam = LATER;
@@ -245,6 +271,14 @@ describe('PlanScreen', () => {
       await fireEvent.press(screen.getByRole('button', { name: 'Save draft' }));
       expect(screen.getByText('Tick at least one task, or discard the draft.')).toBeTruthy();
       expect(mockBack).not.toHaveBeenCalled();
+    });
+
+    it('hides the draft hint once a draft has been saved', async () => {
+      seed();
+      mockParam = LATER;
+      saveDayDraft(LATER, buildPlan({ dayKey: LATER, topics: listTopics(getDb()), tasks: listTasks(getDb()), day: null, dayTasks: [] }));
+      await renderThemed(<PlanScreen />);
+      expect(screen.queryByText(/A draft is saved for later/)).toBeNull();
     });
 
     it('Discard draft asks first, can be cancelled, then discards and goes back', async () => {
@@ -259,6 +293,21 @@ describe('PlanScreen', () => {
       await fireEvent.press(screen.getByRole('button', { name: 'Discard draft' }));
       await fireEvent.press(screen.getByRole('button', { name: 'Discard' }));
       expect(mockBack).toHaveBeenCalledTimes(1);
+      expect(mockReplace).not.toHaveBeenCalled();
+      expect(getDay(getDb(), LATER)).toBeNull();
+    });
+
+    it('Discard draft with no history (cold deep link) goes to Today', async () => {
+      seed();
+      mockParam = LATER;
+      mockCanGoBack.mockReturnValue(false);
+      saveDayDraft(LATER, buildPlan({ dayKey: LATER, topics: listTopics(getDb()), tasks: listTasks(getDb()), day: null, dayTasks: [] }));
+      await renderThemed(<PlanScreen />);
+      await fireEvent.press(screen.getByRole('button', { name: 'Discard draft' }));
+      await fireEvent.press(screen.getByRole('button', { name: 'Discard' }));
+      expect(mockBack).not.toHaveBeenCalled();
+      expect(mockReplace).toHaveBeenCalledTimes(1);
+      expect(mockReplace).toHaveBeenCalledWith('/today');
       expect(getDay(getDb(), LATER)).toBeNull();
     });
   });

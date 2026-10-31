@@ -146,7 +146,7 @@ export default function TodayScreen() {
   const n = items.length;
   const goClose = () => router.push('/close');
   const showClose = !closed && !empty;
-  const closeButton = showClose ? <Button label="Close today" kind="ghost" onPress={goClose} /> : null;
+  const closeButton = showClose ? <Button testID="today-close" label="Close today" kind="ghost" onPress={goClose} /> : null;
 
   return (
     <Screen tabs footer={layout === 'dock' ? <Dock items={items} closed={closed} onClose={showClose ? goClose : undefined} /> : undefined}>
@@ -164,7 +164,7 @@ export default function TodayScreen() {
           <T variant="sub">{`${n} in today's ${noun}`}</T>
         </View>
       ) : null}
-      {canEditToday && !todayPlanned ? <Button label="Plan today" onPress={() => plan(todayKey)} /> : null}
+      {canEditToday && !todayPlanned ? <Button testID="today-plan-today" label="Plan today" onPress={() => plan(todayKey)} /> : null}
       {todayPlanned ? (
         <Card>
           <T weight="bold">{`Today is planned · ${tasks(todayPlan.rows.length)}`}</T>
@@ -186,7 +186,7 @@ export default function TodayScreen() {
           </View>
         </Card>
       ) : null}
-      <Button label="Plan tomorrow" kind={tomorrowPlanned ? 'ghost' : 'primary'} onPress={() => plan(tomorrow)} />
+      <Button testID="today-plan-tomorrow" label="Plan tomorrow" kind={tomorrowPlanned ? 'ghost' : 'primary'} onPress={() => plan(tomorrow)} />
       {empty ? <T variant="sub">Nothing planned for today</T> : null}
       {groups.map((g) => {
         const doneInGroup = g.rows.filter((r) => r.dayTask.completedAt !== null).length;

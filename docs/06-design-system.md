@@ -34,7 +34,7 @@ Unknown or missing keys (from older versions) fall back to the default field by 
 
 `buildTheme(mix)` returns a plain object every component reads via `useTheme()`:
 
-- `colors`: the palette (bg, surface, ink, muted, line, accent, on, 6 topic colors, sun, tint1–3, frame).
+- `colors`: the palette (bg, surface, ink, muted, line, accent, on, danger (error text), dangerFill (danger button, white label), 6 topic colors, sun, tint1–3, frame).
 - **`color-mix()` doesn't exist in React Native.** `colorMix(a, b, pct)` in `theme/colorMix.ts` mixes
   hex colors in sRGB and pre-computes every derived color the prototype makes with CSS: the topic
   fold background (topic 30% over bg), frost, selected states, chain colors, and glow.

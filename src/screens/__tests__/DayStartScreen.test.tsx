@@ -10,12 +10,21 @@ import { DayStartScreen, explanation } from '../DayStartScreen';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
-jest.mock('expo-router', () => ({ router: { push: (...a: unknown[]) => mockPush(...a), back: (...a: unknown[]) => mockBack(...a) } }));
+const mockReplace = jest.fn();
+const mockCanGoBack = jest.fn(() => true);
+jest.mock('expo-router', () => ({
+  router: {
+    push: (...a: unknown[]) => mockPush(...a),
+    back: (...a: unknown[]) => mockBack(...a),
+    replace: (...a: unknown[]) => mockReplace(...a),
+    canGoBack: () => mockCanGoBack(),
+  },
+}));
 jest.mock('@/ui/useMotion', () => ({ useMotion: () => ({ reduce: true, animate: (to: number) => to }) }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
 
 const NOW = dayStartOf('2026-10-29', 4) + 6 * 3_600_000;
-beforeEach(() => { setupState(NOW); mockPush.mockClear(); mockBack.mockClear(); });
+beforeEach(() => { setupState(NOW); mockPush.mockClear(); mockBack.mockClear(); mockReplace.mockClear(); mockCanGoBack.mockReturnValue(true); });
 afterEach(teardownState);
 
 describe('explanation', () => {
@@ -72,6 +81,14 @@ describe('DayStartScreen', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Back to Profile' }));
     expect(mockBack).toHaveBeenCalledTimes(1);
     expect(getDayStartHour(getDb())).toBe(4);
+  });
+
+  it('back with no history goes to Today instead', async () => {
+    mockCanGoBack.mockReturnValue(false);
+    await renderThemed(<DayStartScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Back to Profile' }));
+    expect(mockBack).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith('/today');
   });
 
   it('back goes back (button and Android back)', async () => {

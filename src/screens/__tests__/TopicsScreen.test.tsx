@@ -72,13 +72,17 @@ describe('TopicsScreen', () => {
     expect(getTopic(getDb(), study.id)?.isOpen).toBe(true);
   });
 
-  it('a blank draft is discarded; a named one is saved with the draft defaults', async () => {
+  it('Done on a blank draft explains instead of closing; Delete task backs out; a named one is saved', async () => {
     openTopic();
     await renderThemed(<TopicsScreen />);
 
     await fireEvent.press(screen.getByRole('button', { name: 'Add the first task to Study' }));
     expect(screen.getByLabelText('Task name')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Done' })); // blank -> nothing written
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' })); // blank -> stays open, says why
+    expect(saved()).toHaveLength(0);
+    expect(screen.getByText('A task needs a name')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Delete task' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Delete' }));
     expect(saved()).toHaveLength(0);
     expect(screen.queryByLabelText('Task name')).toBeNull();
 
@@ -109,7 +113,7 @@ describe('TopicsScreen', () => {
     expect(screen.getByDisplayValue('Read')).toBeTruthy();
   });
 
-  it('edits save: debounced name, flushed on Done; a blank name is not saved', async () => {
+  it('edits save: debounced name, flushed on Done; a blank name is not saved and Done waits for a name', async () => {
     const study = openTopic();
     createTask(study.id, { name: 'Read' });
     await renderThemed(<TopicsScreen />);
@@ -125,6 +129,10 @@ describe('TopicsScreen', () => {
     await fireEvent.changeText(screen.getByLabelText('Task name'), '   ');
     expect(screen.getByText('A task needs a name')).toBeTruthy();
     await fireEvent.changeText(screen.getByLabelText('Notes'), 'chapter 3');
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' })); // blank: stays open
+    expect(screen.getByLabelText('Task name')).toBeTruthy();
+    expect(saved()[0].name).toBe('Read more');
+    await fireEvent.changeText(screen.getByLabelText('Task name'), 'Read more');
     await fireEvent.press(screen.getByRole('button', { name: 'Done' })); // flushes at once
     expect(saved()[0]).toMatchObject({ name: 'Read more', note: 'chapter 3' });
 

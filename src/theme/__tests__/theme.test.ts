@@ -43,6 +43,27 @@ describe('buildTheme', () => {
     expect(buildTheme(DEFAULT_LOOK).glass).not.toBeNull();
     expect(buildTheme({ ...DEFAULT_LOOK, surf: 'flat' }).glass).toBeNull();
   });
+  it('draws the tint blobs and chain on every surface, and a different tint changes them', () => {
+    const glassT = buildTheme({ ...DEFAULT_LOOK, surf: 'glass', glass: 'aurora' });
+    const flatT = buildTheme({ ...DEFAULT_LOOK, surf: 'flat', glass: 'aurora' });
+    expect(glassT.backdrop.blobs).toEqual(glassT.glass?.blobs);
+    expect(flatT.backdrop.blobs).toHaveLength(3);
+    expect(flatT.backdrop.blobs).not.toEqual(glassT.backdrop.blobs); // calmer without frosted cards
+    for (const surf of ['raised', 'outline'] as const) {
+      const t = buildTheme({ ...DEFAULT_LOOK, surf, glass: 'aurora' });
+      expect(t.backdrop.blobs).toEqual(flatT.backdrop.blobs); // non-glass surfaces share the calm blobs
+      expect(t.chain).toEqual(glassT.chain);
+    }
+    expect(flatT.chain).toEqual(glassT.chain);
+    expect(buildTheme({ ...DEFAULT_LOOK, surf: 'flat', glass: 'aurora' }).backdrop.blobs).not.toEqual(buildTheme({ ...DEFAULT_LOOK, surf: 'flat' }).backdrop.blobs);
+  });
+  it('keeps the frost but skips the blur on a low-end device or under Reduce Transparency', () => {
+    expect(buildTheme(DEFAULT_LOOK).glass?.blur).toBe(true);
+    const low = buildTheme(DEFAULT_LOOK, { lowEndDevice: true }).glass;
+    expect(low?.blur).toBe(false);
+    expect(low?.frost).toBe(buildTheme(DEFAULT_LOOK).glass?.frost);
+    expect(buildTheme(DEFAULT_LOOK, { lowEndDevice: false }).glass?.blur).toBe(true);
+  });
   it('knows Night owl is dark and Mist is light', () => {
     expect(buildTheme(DEFAULT_LOOK).isDark).toBe(true);
     expect(buildTheme({ ...DEFAULT_LOOK, pal: 'mist' }).isDark).toBe(false);

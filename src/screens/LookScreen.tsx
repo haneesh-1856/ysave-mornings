@@ -171,7 +171,7 @@ export function LookScreen() {
       <T variant="label">CHANGE ONE THING</T>
       {BEFORE_GLASS.map(section)}
       <Card style={{ paddingVertical: 2 }}>
-        <SettingRow label="Glass" value={glassValue(look)} onPress={() => router.push('/settings/glass')} />
+        <SettingRow label="Color & glass" value={glassValue(look)} onPress={() => router.push('/settings/glass')} />
       </Card>
       {AFTER_GLASS.map(section)}
     </Screen>

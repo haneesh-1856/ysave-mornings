@@ -63,7 +63,7 @@ function PlannedBody({ dayKey }: { dayKey: DayKey }) {
       footer={
         <>
           {plannable ? <Button label="Edit" kind="ghost" onPress={() => replaceWithPlan(dayKey)} /> : null}
-          <Button label="Done" onPress={goToday} />
+          <Button testID="planned-done" label="Done" onPress={goToday} />
         </>
       }>
       <Header title={`${name} is planned`} />

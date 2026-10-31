@@ -26,7 +26,9 @@ import { T } from '@/ui/T';
 const DEBOUNCE_MS = 400;
 const REMOVED_TOPIC = 'Removed topic';
 const EMPTY_DRAFT = 'Tick at least one task, or discard the draft.';
-const NOT_PLANNABLE = 'You can plan today until it closes, or tomorrow.';
+const NOT_PLANNABLE =
+  'You can plan today until it closes, or tomorrow. Days further out can be drafted from the Calendar with "Plan ahead".';
+const DRAFT_HINT = 'A draft is saved for later. You confirm it the evening before.';
 
 /** Android does not lift a ScrollView above the keyboard by itself (iOS does, via Screen), so add the room. */
 function useKeyboardSpace() {
@@ -43,10 +45,16 @@ function useKeyboardSpace() {
   return h;
 }
 
+/** Plan can be the first screen of a stack (opened by replace from onboarding), so fall back to Today. */
+function goBack() {
+  if (router.canGoBack()) router.back();
+  else router.replace('/today');
+}
+
 function BackButton() {
   return (
     <View style={{ alignItems: 'flex-start' }}>
-      <Button label="‹ Back" kind="ghost" accessibilityLabel="Back" onPress={() => router.back()} />
+      <Button label="‹ Back" kind="ghost" accessibilityLabel="Back" onPress={goBack} />
     </View>
   );
 }
@@ -144,7 +152,7 @@ function PlanBody({ dayKey }: { dayKey: DayKey }) {
       guard.run(() => {
         flush();
         plan.saveDraft();
-        router.back();
+        goBack();
       });
     } catch (e) {
       if (!(e instanceof ValidationError)) throw e;
@@ -156,7 +164,7 @@ function PlanBody({ dayKey }: { dayKey: DayKey }) {
       guard.run(() => {
         flush(); // notes belong to the library task, not the draft
         plan.discardDraft();
-        router.back();
+        goBack();
       });
     } catch (e) {
       if (!(e instanceof ValidationError)) throw e;
@@ -218,6 +226,7 @@ function PlanBody({ dayKey }: { dayKey: DayKey }) {
       <BackButton />
       <Header title={isDraft ? 'Plan ahead' : title} />
       {isDraft ? <T variant="sub">{`${name}, ${Number(dayKey.slice(8))} ${monthName(dayKey)}`}</T> : null}
+      {isDraft && !plan.hasDraft ? <T variant="sub">{DRAFT_HINT}</T> : null}
       {draft.groups.map(g => {
         const topic = topicById.get(g.topicId);
         if (g.rows.length === 0) return null;

@@ -22,7 +22,6 @@ import { T } from '@/ui/T';
 
 // Pop back to the existing (tabs) entry (Today focused) rather than stacking a second one.
 const goToday = () => router.dismissTo('/(tabs)/today');
-const MISSING_COLOR = '#d4574e'; // same alert red as Button's danger kind
 
 export default function CloseScreen() {
   const s = useCloseSummary();
@@ -82,7 +81,7 @@ export default function CloseScreen() {
           {s.closed ? (
             <>
               <T weight="bold">{justClosed ? `${noun.charAt(0).toUpperCase()}${noun.slice(1)} closed` : 'Today is closed'}</T>
-              <Button label="Plan tomorrow" onPress={planTomorrow} />
+              <Button testID="close-plan-tomorrow" label="Plan tomorrow" onPress={planTomorrow} />
               <Button label="Back to Today" kind="ghost" onPress={goToday} />
             </>
           ) : (
@@ -96,7 +95,7 @@ export default function CloseScreen() {
                       testID={missing.includes(u.dayTaskId) ? 'outcome-missing' : undefined}
                       style={{
                         gap: 8, padding: 8, borderRadius: t.radius.r, borderWidth: 2,
-                        borderColor: missing.includes(u.dayTaskId) ? MISSING_COLOR : 'transparent',
+                        borderColor: missing.includes(u.dayTaskId) ? t.c.danger : 'transparent',
                       }}>
                       <OutcomePicker
                         name={u.name}
@@ -109,8 +108,8 @@ export default function CloseScreen() {
                   ))}
                 </Card>
               ) : null}
-              {message ? <T accessibilityRole="alert" style={{ color: MISSING_COLOR }}>{message}</T> : null}
-              <Button label={`Close the ${noun}`} disabled={guard.busy} onPress={close} />
+              {message ? <T accessibilityRole="alert" color="danger">{message}</T> : null}
+              <Button testID="close-confirm" label={`Close the ${noun}`} disabled={guard.busy} onPress={close} />
               <Button label="Not yet" kind="ghost" onPress={goToday} />
             </>
           )}

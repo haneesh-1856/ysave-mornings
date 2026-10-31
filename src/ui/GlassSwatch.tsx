@@ -21,7 +21,7 @@ export function GlassSwatch({ tint }: { tint: Tint }) {
   const r = Math.max(2, t.radius.r - 2);
   return (
     <View style={{ width: SIZE, height: SIZE, borderRadius: r, overflow: 'hidden', backgroundColor: t.c.bg, borderWidth: 1, borderColor: t.c.line }}>
-      <Svg width={SIZE} height={SIZE} style={{ position: 'absolute' }}>
+      <Svg width={SIZE} height={SIZE} style={{ position: 'absolute' }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <Defs>
           {POS.map((q, i) => (
             <RadialGradient key={i} id={`gs${i}`} cx={q.cx * SIZE} cy={q.cy * SIZE} r={SIZE * 0.65} gradientUnits="userSpaceOnUse">

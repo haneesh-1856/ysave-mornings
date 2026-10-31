@@ -132,6 +132,16 @@ describe.each([
 });
 
 describe('setDayStart validation and hooks', () => {
+  it('uses one clock reading for reconcile and the writes', () => {
+    let calls = 0;
+    setClockOverride(() => {
+      calls += 1;
+      return t + calls; // advances on every read
+    });
+    setDayStart(6);
+    expect(calls).toBe(1);
+  });
+
   it('rejects hours outside 0-23 and changes nothing', () => {
     for (const h of [-1, 24, 3.5]) expect(() => setDayStart(h)).toThrow(ValidationError);
     expect(getDayStartHour(db)).toBe(4);

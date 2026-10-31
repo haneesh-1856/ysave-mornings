@@ -14,6 +14,10 @@ import { renderThemed } from '@/ui/testing';
 import CalendarScreen from '../../app/(tabs)/calendar';
 
 let mockN = 0;
+// These render large trees (a full month grid of day cells); motion is already mocked, but under full parallel load a test
+// can pass 5 s though it takes well under that alone. A modest per-file timeout avoids the flake.
+jest.setTimeout(15000);
+
 jest.mock('@/state/ids', () => ({ newId: () => `id-${++mockN}` }));
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
@@ -177,7 +181,7 @@ describe('Calendar screen', () => {
     expect(screen.queryByRole('button', { name: 'Go to today' })).toBeNull();
   });
 
-  it('a future month shows "Not planned yet." with no button', async () => {
+  it('a far-future day reads "Not planned yet." and offers neither Plan nor Edit', async () => {
     await renderThemed(<CalendarScreen />);
     await fireEvent.press(screen.getByRole('button', { name: 'Next month' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Next month' }));

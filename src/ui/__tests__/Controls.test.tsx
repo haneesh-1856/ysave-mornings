@@ -42,6 +42,20 @@ describe('ChipSet', () => {
     await fireEvent.press(screen.getByLabelText('After class'));
     expect(onChange).toHaveBeenLastCalledWith(null);
   });
+
+  it('by default the selected chip announces it can be cleared and deselects to null; clearable={false} keeps it', async () => {
+    const onChange = jest.fn();
+    const { rerender } = await renderThemed(<ChipSet label="When" options={CUES} value="After class" onChange={onChange} />);
+    expect(screen.getByLabelText('After class').props.accessibilityHint).toBe('Double tap to clear');
+    await fireEvent.press(screen.getByLabelText('After class'));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenLastCalledWith(null);
+    onChange.mockClear();
+    await rerender(<ChipSet label="When" options={CUES} value="After class" onChange={onChange} clearable={false} />);
+    expect(screen.getByLabelText('After class').props.accessibilityHint).toBeUndefined();
+    await fireEvent.press(screen.getByLabelText('After class'));
+    expect(onChange).toHaveBeenLastCalledWith('After class');
+  });
 });
 
 describe('ConfirmBox', () => {

@@ -13,7 +13,7 @@ type Props = Omit<PressableProps, 'style' | 'children'> & {
 
 export function Button({ label, kind = 'primary', style, disabled, onPress, ...rest }: Props) {
   const t = useTheme();
-  const bg = kind === 'primary' ? t.c.accent : kind === 'danger' ? '#d4574e' : 'transparent';
+  const bg = kind === 'primary' ? t.c.accent : kind === 'danger' ? t.c.dangerFill : 'transparent';
   const fg = kind === 'primary' ? t.c.on : kind === 'danger' ? '#ffffff' : t.c.ink;
   return (
     <Pressable

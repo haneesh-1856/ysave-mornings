@@ -98,3 +98,40 @@ describe('favourites', () => {
     expect(saved().find(f => f.id === 'seed-2')).toMatchObject({ pinned: false });
   });
 });
+
+describe('blurChosen (low-end default rule)', () => {
+  beforeEach(() => useLookStore.setState({ look: DEFAULT_LOOK, blurChosen: false }));
+  afterAll(() => useLookStore.setState({ blurChosen: false }));
+
+  it('stays false for other changes, becomes true when the blur level changes, and is saved', () => {
+    saveLook({ pal: 'sunrise' });
+    expect(useLookStore.getState().blurChosen).toBe(false);
+    expect(getSetting(getDb(), 'gblurChosen')).toBeUndefined();
+    confirmLook({ gblur: 'heavy' });
+    expect(useLookStore.getState().blurChosen).toBe(true);
+    expect(getSetting(getDb(), 'gblurChosen')).toBe(true);
+    saveLook({ pal: 'night' });
+    expect(useLookStore.getState().blurChosen).toBe(true);
+  });
+
+  it('an explicit blur confirm counts as a choice even at the same level; a favourite at the same level still does not', () => {
+    confirmLook({});
+    expect(useLookStore.getState().blurChosen).toBe(false);
+    confirmLook({}, { chooseBlur: true });
+    expect(useLookStore.getState().blurChosen).toBe(true);
+    expect(getSetting(getDb(), 'gblurChosen')).toBe(true);
+    expect(useLookStore.getState().look).toEqual(DEFAULT_LOOK);
+  });
+
+  it('loadLook restores the flag, and infers it from a non-default saved level', () => {
+    loadLook();
+    expect(useLookStore.getState().blurChosen).toBe(false);
+    setSetting(getDb(), 'gblurChosen', true, 2);
+    loadLook();
+    expect(useLookStore.getState().blurChosen).toBe(true);
+    setSetting(getDb(), 'gblurChosen', false, 3);
+    setSetting(getDb(), 'look', { ...DEFAULT_LOOK, gblur: 'heavy' }, 3);
+    loadLook();
+    expect(useLookStore.getState().blurChosen).toBe(true);
+  });
+});

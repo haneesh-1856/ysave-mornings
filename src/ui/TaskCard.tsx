@@ -185,7 +185,8 @@ function Back({ value, onDone, onName, onNote, onChange, onDelete }: Omit<Props,
       ) : (
         <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'flex-end' }}>
           <Button label="Delete task" kind="ghost" onPress={() => setConfirming(true)} />
-          <Button label="Done" onPress={onDone} />
+          {/* A blank name never closes silently: show why instead (Delete task is the way out of a draft). */}
+          <Button label="Done" onPress={() => (blank ? setTouched(true) : onDone())} />
         </View>
       )}
     </View>

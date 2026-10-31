@@ -87,6 +87,17 @@ describe('TaskCard', () => {
     expect(cb.onName).toHaveBeenLastCalledWith('  ');
   });
 
+  it('Done on a blank name stays open and shows why instead of closing', async () => {
+    const { cb, ui, value } = setup({ name: '' }, true);
+    await renderThemed(ui(true, value));
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+    expect(cb.onDone).not.toHaveBeenCalled();
+    expect(screen.getByText('A task needs a name')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Task name'), 'Read');
+    await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
+    expect(cb.onDone).toHaveBeenCalledTimes(1);
+  });
+
   it('delete asks first; cancel keeps, confirm deletes', async () => {
     const { cb, ui, value } = setup({}, true);
     await renderThemed(ui(true, value));

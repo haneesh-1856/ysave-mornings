@@ -25,6 +25,7 @@ export function PlanFooter({ count, minutes, dayName, canConfirm, busy, onConfir
         {`${count} ${count === 1 ? 'task' : 'tasks'} · ${formatMinutes(minutes)}${draft ? '' : ' planned'}`}
       </T>
       <Button
+        testID="plan-confirm"
         label={draft ? 'Save draft' : `${dayName} looks like this ✓`}
         disabled={!canConfirm || busy}
         onPress={onConfirm}

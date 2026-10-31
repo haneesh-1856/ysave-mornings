@@ -92,6 +92,8 @@ function Cell({ cell, selected, onSelect, locale }: { cell: MonthGridCell; selec
       accessibilityLabel={cellLabel(cell, locale, t.look.art)}
       accessibilityState={{ selected }}
       onPress={() => onSelect(cell.dayKey)}
+      // 7 columns are < 44 pt wide below ~340 dp; the 3 pt gaps either side are claimed so the effective target is wider without touching a neighbour's cell.
+      hitSlop={{ left: 3, right: 3 }}
       style={{ flex: 1, minHeight: CELL_H }}>
       <View
         style={{

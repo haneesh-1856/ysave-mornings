@@ -36,6 +36,16 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 let mockRenders = 0;
+const mockHeaderRenders = { n: 0 };
+jest.mock('@/ui/Header', () => {
+  const actual = jest.requireActual('@/ui/Header');
+  return { ...actual, Header: (p: object) => { mockHeaderRenders.n++; return actual.Header(p); } };
+});
+let mockBigRenders = 0;
+jest.mock('@/ui/BigNumber', () => {
+  const actual = jest.requireActual('@/ui/BigNumber');
+  return { ...actual, BigNumber: (p: object) => { mockBigRenders++; return actual.BigNumber(p); } };
+});
 jest.mock('@/state/hooks/useRunTask', () => {
   const actual = jest.requireActual('@/state/hooks/useRunTask');
   return {
@@ -47,6 +57,7 @@ jest.mock('@/state/hooks/useRunTask', () => {
   };
 });
 
+const COOLDOWN_SETTLE_MS = 1000;
 const TODAY = '2026-10-29';
 const T0 = dayStartOf(TODAY, 4) + 6 * 3_600_000;
 let clock = T0;
@@ -225,9 +236,15 @@ describe('RunScreen', () => {
     const { read } = plan();
     await renderThemed(<RunScreen dayTaskId={read} />);
     await fireEvent.press(screen.getByRole('button', { name: 'Start' }));
+    await advance(COOLDOWN_SETTLE_MS); // the Start button's cooldown reset re-renders the body once; ticks must not
     const before = mockRenders;
-    await advance(10_000);
+    const headerBefore = mockHeaderRenders.n;
+    expect(headerBefore).toBeGreaterThan(0); // the probe is live, so the no-re-render check below is not vacuous
+    const bigBefore = mockBigRenders;
+    for (let i = 0; i < 10; i++) await advance(1000);
     expect(mockRenders).toBe(before);
+    expect(mockHeaderRenders.n).toBe(headerBefore); // heavy siblings of the clock never re-render on a tick
+    expect(mockBigRenders - bigBefore).toBeGreaterThanOrEqual(9); // the number itself does tick
     expect(screen.getByText('5')).toBeTruthy(); // 4:50 left rounds up
     await advance(60_000);
     expect(mockRenders).toBe(before);

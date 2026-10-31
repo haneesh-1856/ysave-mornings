@@ -3,7 +3,7 @@ import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { useTheme } from '@/theme/ThemeProvider';
 
-// The three soft color blobs that glow behind frosted-glass cards (positions from the prototype's .s-glass .screen).
+// The three soft color blobs that glow behind the page (the tint, on every surface) (positions from the prototype's .s-glass .screen).
 const BLOBS = [
   { cx: '15%', cy: '10%', r: '45%' },
   { cx: '90%', cy: '60%', r: '45%' },
@@ -12,10 +12,9 @@ const BLOBS = [
 
 export function Background() {
   const t = useTheme();
-  if (!t.glass) return null;
-  const blobs = t.glass.blobs;
+  const blobs = t.backdrop.blobs;
   return (
-    <Svg style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Svg style={StyleSheet.absoluteFill} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Defs>
         {BLOBS.map((b, i) => (
           <RadialGradient key={i} id={`blob${i}`} cx={b.cx} cy={b.cy} r={b.r} gradientUnits="userSpaceOnUse">

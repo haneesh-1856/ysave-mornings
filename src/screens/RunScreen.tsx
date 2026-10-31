@@ -112,7 +112,7 @@ function RunBody({ dayTask, state, sessions, topicName, note }: BodyProps) {
   const gold = state === 'stopped' && isGold(dayTask.budgetSec, sessions, now());
 
   let button;
-  if (state === 'idle') button = <Button label="Start" disabled={guard.busy} onPress={() => act(startTask)} />;
+  if (state === 'idle') button = <Button testID="run-start" label="Start" disabled={guard.busy} onPress={() => act(startTask)} />;
   else if (state === 'running') button = <Button label="Pause" kind="ghost" disabled={guard.busy} onPress={() => act(pauseTask)} />;
   else if (state === 'paused') button = <Button label="Resume" disabled={guard.busy} onPress={() => act(startTask)} />;
   else if (state === 'overtime') button = <Button label="Stop" disabled={guard.busy} onPress={() => act(stopTask)} />;
@@ -120,7 +120,7 @@ function RunBody({ dayTask, state, sessions, topicName, note }: BodyProps) {
 
   return (
     <Screen footer={button}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Today" onPress={leave} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>
+      <Pressable testID="run-back" accessibilityRole="button" accessibilityLabel="Today" onPress={leave} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}>
         <T color="accent" weight="bold">‹ Today</T>
       </Pressable>
       <T variant="label" accessibilityLiveRegion="polite">{STATE_LABEL[state]}</T>
@@ -140,7 +140,7 @@ function RunBody({ dayTask, state, sessions, topicName, note }: BodyProps) {
       <RunClock dayTask={dayTask} sessions={sessions} />
       <Celebration visible={done} />
       {gold ? <T weight="bold" color="accent" style={{ textAlign: 'center' }}>Gold ring earned</T> : null}
-      {error ? <T variant="sub" accessibilityRole="alert" style={{ color: '#d4574e', textAlign: 'center' }}>{error}</T> : null}
+      {error ? <T variant="sub" color="danger" accessibilityRole="alert" style={{ textAlign: 'center' }}>{error}</T> : null}
       {done ? (
         <View style={{ alignItems: 'center', paddingVertical: 8 }}>
           <Collection items={items} closed={day?.closedAt != null} scale={1.2} animateLast={!openedDone} />

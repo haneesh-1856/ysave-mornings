@@ -71,11 +71,11 @@ describe('ProfileScreen', () => {
     expect(screen.getByText('0h')).toBeTruthy(); // a check task adds no focused time
   });
 
-  it('Look and Glass rows show their values and open their screens', async () => {
+  it('Look and Color & glass rows show their values and open their screens', async () => {
     await renderThemed(<ProfileScreen />);
     await fireEvent.press(screen.getByRole('button', { name: 'Look, Night owl glass' }));
     expect(mockPush).toHaveBeenCalledWith('/settings/look');
-    await fireEvent.press(screen.getByRole('button', { name: 'Glass, Match the palette' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Color & glass, Night owl · Frosted' }));
     expect(mockPush).toHaveBeenCalledWith('/settings/glass');
   });
 
@@ -88,12 +88,12 @@ describe('ProfileScreen', () => {
     await act(async () => saveLook({ art: 'glass' }));
   });
 
-  it('names a favourite, "Custom" for an unmatched mix, and "Off" for Glass without frosted glass', async () => {
+  it('names a favourite, "Custom" for an unmatched mix, and "No frost" for Color & glass without frosted glass', async () => {
     await renderThemed(<ProfileScreen />);
     await act(async () => saveLook({ pal: 'sunrise' }));
     expect(screen.getByRole('button', { name: 'Look, Custom' })).toBeTruthy();
     await act(async () => saveLook({ surf: 'flat' }));
-    expect(screen.getByRole('button', { name: 'Glass, Off' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Color & glass, Sunrise · No frost' })).toBeTruthy();
     await act(async () => saveLook(SEED_FAVOURITES[1].mix));
     expect(screen.getByRole('button', { name: 'Look, Morning mist' })).toBeTruthy();
   });

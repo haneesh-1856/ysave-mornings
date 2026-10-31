@@ -37,7 +37,7 @@ describe('LookScreen', () => {
   it('lists the 11 rows collapsed, in the style-lab order, with their current values', async () => {
     await renderThemed(<LookScreen />);
     const labels = [
-      'Colors, Night owl', 'Typeface, Friendly', 'Corners, Soft', 'Surfaces, Frosted glass', 'Glass, Match the palette',
+      'Colors, Night owl', 'Typeface, Friendly', 'Corners, Soft', 'Surfaces, Frosted glass', 'Color & glass, Night owl · Frosted',
       'Collection, Glass jar', 'Motion, Springy', 'Screen transition, Slide sideways', 'Home structure, Jar in a bottom dock',
       'Countdown bar, Thin line, big number', 'Bottom tabs, Floating pill',
     ];
@@ -183,12 +183,12 @@ describe('LookScreen', () => {
     expect(screen.getByRole('button', { name: 'Pin Morning mist' }).props.accessibilityState.selected).toBe(false);
   });
 
-  it('the Glass row shows the tint, or Off, and opens the Glass screen', async () => {
+  it('the Color & glass row shows the tint and frost, and opens the screen', async () => {
     await renderThemed(<LookScreen />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Glass, Match the palette' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Color & glass, Night owl · Frosted' }));
     expect(mockPush).toHaveBeenCalledWith('/settings/glass');
     await act(async () => saveLook({ surf: 'flat' }));
-    expect(screen.getByRole('button', { name: 'Glass, Off' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Color & glass, Night owl · No frost' })).toBeTruthy();
   });
 
   it('back goes back (button and Android back)', async () => {

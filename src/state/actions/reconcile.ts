@@ -26,9 +26,8 @@ function isEmpty(o: Ops): boolean {
  *    prefills an unplanned today. 2) today's pendingCompletions -> completedAt at the exact instant.
  * Idempotent: a second call with the same clock writes nothing and bumps nothing.
  */
-export function reconcile(): { autoClosed: DayKey[] } {
+export function reconcile(at: number = now()): { autoClosed: DayKey[] } {
   const db = getDb();
-  const at = now();
   const dayStartHour = getDayStartHour(db);
   const todayKey = resolveTodayKey(db, at);
 

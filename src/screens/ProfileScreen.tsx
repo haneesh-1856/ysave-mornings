@@ -44,10 +44,17 @@ export function ProfileScreen() {
       <Card style={{ paddingVertical: 2 }}>
         <SettingRow label="My day starts" value={hourText(hour)} onPress={() => router.push('/settings/day-start')} />
         <SettingRow label="Look" value={lookName(t.look, favourites)} onPress={() => router.push('/settings/look')} />
-        <SettingRow label="Glass" value={glassValue(t.look)} onPress={() => router.push('/settings/glass')} />
+        <SettingRow label="Color & glass" value={glassValue(t.look)} onPress={() => router.push('/settings/glass')} />
         <SettingRow label="Sounds" value="Coming later" />
         <SettingRow label="Reminders" value="Not decided" />
         <SettingRow label="Friends & teams" value="Coming later" />
+        {__DEV__ ? (
+          <SettingRow
+            label="Preview welcome flow"
+            value="Dev only, saves nothing"
+            onPress={() => router.push({ pathname: '/onboarding', params: { preview: '1' } })}
+          />
+        ) : null}
       </Card>
     </Screen>
   );

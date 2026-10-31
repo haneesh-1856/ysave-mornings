@@ -56,7 +56,7 @@ export function TabBar({ state, navigateToTab, insets }: BottomTabBarProps) {
             {nav === 'minimal' ? (
               <View style={[styles.dot, { backgroundColor: on ? t.c.accent : 'transparent' }]} />
             ) : (
-              <T variant="sub" weight="semibold" style={{ fontSize: 11.5, lineHeight: 14, color }}>
+              <T variant="sub" weight="semibold" numberOfLines={1} style={{ fontSize: 11.5, lineHeight: 14, color }}>
                 {LABEL[route.name]}
               </T>
             )}
