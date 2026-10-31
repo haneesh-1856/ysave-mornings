@@ -4,8 +4,7 @@ import { applyOps } from '../../data/repos/ops';
 import { getOpenSession } from '../../data/repos/sessions';
 import type { DB } from '../../data/types';
 import { dayEndOf, dayStartOf } from '../../domain/dayKey';
-import { createTask, createTopic, removeTopic } from '../actions/library';
-import { setTaskNoteFromPlan } from '../actions/plan';
+import { createTask, createTopic, removeTopic, setTaskNote } from '../actions/library';
 import { reconcile } from '../actions/reconcile';
 import { pauseTask, startTask, stopTask, toggleCheckTask } from '../actions/run';
 import { setClockOverride } from '../clock';
@@ -278,7 +277,7 @@ describe('useNow', () => {
 describe('useRunTask', () => {
   it('returns row and note, and completes the task when it hits 0 while open', async () => {
     const { A } = seed();
-    setTaskNoteFromPlan(dayTask(A).taskId!, 'remember the formula');
+    setTaskNote(dayTask(A).taskId!, 'remember the formula');
     startTask(A);
     jest.useFakeTimers();
     const { result } = await renderHook(() => useRunTask(A));

@@ -2,9 +2,14 @@ export type Epoch = number; // ms since 1970 UTC
 export type DayKey = string; // 'YYYY-MM-DD', local calendar date
 export type MonthKey = string; // 'YYYY-MM'
 export type TaskKind = 'timed' | 'check';
-export type ColorKey = 'study' | 'health' | 'home' | 'sun' | 'c4' | 'c5';
+/** The six topic colours a user picks from, plus 'none': the neutral colour of the built-in No topic (ADR-012). */
+export type ColorKey = 'study' | 'health' | 'home' | 'sun' | 'c4' | 'c5' | 'none';
 export type ClosedBy = 'user' | 'auto';
 export type CloseOutcome = 'moved' | 'let_go';
+
+/** The built-in topic that holds tasks without a topic (ADR-012): one row made by a migration, never renamed or deleted. */
+export const NO_TOPIC_ID = 'no-topic';
+export const NO_TOPIC_NAME = 'No topic';
 
 export interface Topic {
   id: string;
@@ -54,6 +59,8 @@ export interface DayTask {
   budgetSec: number;
   cue: string | null;
   treat: string | null;
+  /** This day's note for the row (ADR-011). Never copied to or from the library task note. */
+  note: string | null;
   forwardedFromDayKey: DayKey | null;
   completedAt: Epoch | null;
   closeOutcome: CloseOutcome | null;

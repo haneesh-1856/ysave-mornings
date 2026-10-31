@@ -133,3 +133,60 @@ Rule (user chose the recommended option):
   `isDefault` changes), compared with the day's `planConfirmedAt` / `planDraftedAt`. Drizzle migration; existing rows
   get NULL (= no change after any plan). Repo + domain (buildPlan) + tests.
 - Today tab's tomorrow list keeps showing stored rows only (B appears there after Confirm).
+
+## Chunk 10 · Day notes (phone check, user 2026-10-31)
+User: "Note can be added anywhere, but it all should be reflected in today. On the library the note might be the general
+note for that task; in tomorrow's plan the note might specify what to do tomorrow; in today's edit it might be an action
+to take on that task. A note added for today or while planning tomorrow should NOT be added to the library."
+Rule (ADR-011):
+- `tasks.note` = the general note (Library editor only). `day_tasks.note` (new, nullable, max 1000, blank = null) = that
+  day's note, on every row including one-offs.
+- Plan's Note field edits the row's day note ("Note for <weekday>"), saved with the draft/confirm like cue/treat; the
+  library note shows read-only above it ("Library note: ..."). Nothing is ever copied between the two.
+- Editing today's plan keeps and edits the same day note. Stored rows of an open day: `setDayTaskNote(dayTaskId, note)`
+  (refuses on a closed day).
+- A moved task carries its day note to the next day's row (an existing next-day row keeps its own note if it has one).
+- Done in chunk 11: the task page on Today, `setTaskNoteFromPlan` removed.
+
+## Chunk 11 · Task page (phone check, user 2026-10-31)
+User: tapping a task on Today must open it so the notes added earlier can be read; every task (timed or checklist) opens
+a page with the cumulative notes, a Start/Pause button (timed) or Mark done (checklist), and a back button. Also: on
+Today a checklist row had its tick box before the name while a timed row shows its time after it; remove the boxes and
+say "checklist" after the name.
+Rule:
+- Route `/run/[dayTaskId]` is the task page for both kinds. Notes: "Library note" (read-only, only if non-empty) and
+  "Note for <weekday>" (`day_tasks.note`, editable while the day is open via `setDayTaskNote`, debounced, flushed on leave).
+- Checklist: "Mark done" / "Mark not done" (`toggleCheckTask`), state label To do / Done, celebration + collection on done.
+- Closed day: page opens read-only (notes not editable, no action, "Back to Today", "Today is closed. It is read-only now.").
+- Today: no tick boxes. A checklist row = dot, name, "checklist" (or check mark + "done"). Every row opens the page, closed day included.
+- `setTaskNoteFromPlan` is removed: only the Library editor writes `tasks.note`.
+
+## Chunk 12 · A task needs no topic (phone check, user 2026-10-31)
+User: "When planning tomorrow and creating a new task, I can see topic (required), name, length/checklist; I could not
+see any note section. So add that note section. Also don't make that topic for a task necessary, either in the planning
+tomorrow part or in the library. So in the library there should also be not just add new topic, also add new task."
+Rule (ADR-012):
+- One built-in topic `NO_TOPIC_ID = 'no-topic'` ("No topic", colorKey `none`, sortOrder 1000000), created by migration
+  `20261031212212_no_topic` (`INSERT OR IGNORE`). Not renameable, recolourable or deletable (repo `ValidationError`).
+  `listTopics` includes it; `listUserTopics` does not (onboarding, move up/down, new-topic colour pick use the latter).
+- Theme: `t.topic('none')` = muted ink, fold = page colour. `TOPIC_COLOR_KEYS` (the swatches) stays six.
+- State: `createTask(topicId | null | undefined, input)` (missing/null = No topic); `updateTask(id, { topicId })` moves a
+  task to the end of any live topic or `NO_TOPIC_ID` (missing/deleted topic = `ValidationError`).
+- Library list (`useTopicsLibrary`) shows No topic (last) only while it holds a live task; `useTopic(NO_TOPIC_ID)` is
+  null, so `/topic/[id]` shows "missing"; the Topics header counts user topics only and the fold has no "⋯".
+- Plan one-off form: Task name, Topic (No topic first, default), Length, "Note for <weekday>" (optional, max 1000;
+  blank = null, stored as the row's day note). Add needs only a name.
+- Chunk 13: see below.
+
+## Chunk 13 · Library: new task + topic picker (phone check, user 2026-10-31)
+User: "...in the library there should also be not just add new topic, also add new task."
+Rule:
+- Library has "+ New task" (testID `library-new-task`) beside "+ New topic"; it works with no topics. It opens the same
+  draft card as "+ Add task", with No topic chosen. While No topic holds no task, a stand-in "No topic" fold shows the
+  draft; once the draft is named the task is created and the group is real.
+- Task card back: "Topic" radiogroup (`ui/TopicPicker`, shared with the Plan one-off form): No topic first, then user
+  topics. `TaskCardValue.topicId` + props `topics`, `topicError?`; the patch `{ topicId }` goes through `onChange`.
+  Saved task: `updateTask(id, { topicId })` (moves to the end of that topic, its fold is opened). Draft: kept in the
+  editor, used by `createTask` once named; "+ Add task" inside a topic starts with that topic.
+- `TaskEditor` props: `topics`, `onCreated(id, topicId)`, `onMoved?(topicId)`. A `ValidationError` (topic deleted
+  meanwhile) shows "That topic no longer exists. Pick another." under the picker.

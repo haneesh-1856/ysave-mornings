@@ -11,10 +11,12 @@ Every table has `createdAt`, `updatedAt`. Library tables also have `deletedAt` (
 |---|---|---|
 | id | text PK | |
 | name | text | 1–24 chars, trimmed |
-| colorKey | text | `study` \| `health` \| `home` \| `sun` \| `c4` \| `c5` (resolved by the palette) |
+| colorKey | text | `study` \| `health` \| `home` \| `sun` \| `c4` \| `c5` (resolved by the palette); `none` only for the built-in No topic (muted ink) |
 | sortOrder | integer | |
 | isOpen | integer (bool) | fold state on the Topics tab |
 | deletedAt | integer null | removing a topic soft-deletes it and its tasks |
+
+**No topic (ADR-012).** One built-in row, `id = 'no-topic'` (`NO_TOPIC_ID`), name "No topic", colorKey `none`, `sortOrder` 1000000 (after every user topic; user topics number from 0), open. Inserted with `INSERT OR IGNORE` by migration `20261031212212_no_topic`, so a fresh install and an upgrade both end with exactly one. It holds tasks (and day rows) that have no topic, which keeps `tasks.topicId` and `day_tasks.topicId` NOT NULL. The repo refuses to rename, recolour, reorder or delete it (`ValidationError`); `listTopics` includes it, `listUserTopics` does not.
 
 ### `tasks`
 | column | type | notes |
@@ -60,6 +62,7 @@ task is moved into a day that has no row yet (then `planConfirmedAt` stays null,
 | kind | text | `timed` \| `check` |
 | budgetSec | integer | planned minutes × 60 for this day (0 for check) |
 | cue, treat | text null | per-day values |
+| note | text null | this day's note for the row (ADR-011), max 1000 characters; blank is stored as null. Separate from `tasks.note`, never copied to or from it. Travels with a moved task |
 | forwardedFromDayKey | text null | set on checklist tasks moved from the previous day |
 | completedAt | integer null | timed: moment remaining hit 0. check: moment ticked |
 | closeOutcome | text null | for an unticked check at close: `moved` \| `let_go` |

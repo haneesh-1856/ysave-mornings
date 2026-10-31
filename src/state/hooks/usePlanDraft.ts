@@ -9,6 +9,7 @@ import {
   isDraftable,
   plannableDays,
   setCue as setCueOn,
+  setNote as setNoteOn,
   setTicked,
   setTreat as setTreatOn,
   stepMinutes,
@@ -35,7 +36,10 @@ export interface PlanDraftApi {
   step(key: string, delta: 5 | -5): void;
   setCue(key: string, v: string | null): void;
   setTreat(key: string, v: string | null): void;
-  addOneOff(row: { topicId: string; name: string; kind: TaskKind; minutes: number }): void;
+  /** The row's note for this day (ADR-011); saved with the draft/confirm. Blank clears it. Never the library note. */
+  setNote(key: string, v: string | null): void;
+  /** `topicId` NO_TOPIC_ID for a one-off without a topic; `note` is this day's note (blank = none). */
+  addOneOff(row: { topicId: string; name: string; kind: TaskKind; minutes: number; note?: string | null }): void;
   canConfirm: boolean;
   /**
    * confirmDayPlan(dayKey, draft), then freeze: later 'days' bumps no longer change draft, plannable, dirty,
@@ -157,8 +161,9 @@ export function usePlanDraft(dayKey: DayKey): PlanDraftApi {
   const step = useCallback((key: string, delta: 5 | -5) => edit(d => stepMinutes(d, key, delta)), [edit]);
   const setCue = useCallback((key: string, v: string | null) => edit(d => setCueOn(d, key, v)), [edit]);
   const setTreat = useCallback((key: string, v: string | null) => edit(d => setTreatOn(d, key, v)), [edit]);
+  const setNote = useCallback((key: string, v: string | null) => edit(d => setNoteOn(d, key, v)), [edit]);
   const addOneOff = useCallback(
-    (row: { topicId: string; name: string; kind: TaskKind; minutes: number }) => {
+    (row: { topicId: string; name: string; kind: TaskKind; minutes: number; note?: string | null }) => {
       const topic = getTopic(db, row.topicId);
       if (!topic) return;
       edit(d => addOneOffTo(d, { ...row, colorKey: topic.colorKey }));
@@ -177,6 +182,7 @@ export function usePlanDraft(dayKey: DayKey): PlanDraftApi {
     step,
     setCue,
     setTreat,
+    setNote,
     addOneOff,
     canConfirm: draft != null && canConfirmDraft(draft),
     confirm,

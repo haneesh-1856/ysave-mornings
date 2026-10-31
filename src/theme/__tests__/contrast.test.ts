@@ -116,3 +116,21 @@ describe('palette contrast (WCAG AA)', () => {
     expect(contrastRatio('rgba(0,0,0,0.5)', '#fff')).toBeCloseTo(contrastRatio('#808080', '#fff'), 1);
   });
 });
+
+describe('the neutral No topic colour (ADR-012)', () => {
+  it('is the muted ink on the page colour; ink and muted text keep ink and muted text at 4.5:1 for every palette and tint', () => {
+    const failures: string[] = [];
+    for (const pal of pals) {
+      for (const glass of glasses) {
+        const t = buildTheme({ ...DEFAULT_LOOK, pal, glass });
+        const none = t.topic('none');
+        if (none.color !== t.c.muted) failures.push(`${pal}/${glass} colour is not muted`);
+        for (const [name, fg] of [['ink', t.c.ink], ['muted', t.c.muted]] as const) {
+          if (contrastRatio(fg, none.fold) < AA) failures.push(`${pal}/${glass} ${name} on the No topic fold`);
+        }
+        if (contrastRatio(none.color, t.c.surface) < 3) failures.push(`${pal}/${glass} dot on surface`);
+      }
+    }
+    expect(failures).toEqual([]);
+  });
+});

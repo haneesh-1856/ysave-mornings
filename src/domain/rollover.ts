@@ -15,7 +15,8 @@ export interface Ops {
   createDays: Day[];
   insertDayTasks: DayTaskDraft[];
   /** Existing next-day rows that a moved task landed on: they become "from <day>" rows (no duplicate). */
-  forwardDayTasks: { dayTaskId: string; forwardedFromDayKey: DayKey }[];
+  /** `note` is set only when the moved row's note should fill an empty note on the existing next-day row. */
+  forwardDayTasks: { dayTaskId: string; forwardedFromDayKey: DayKey; note?: string }[];
 }
 
 const emptyOps = (): Ops => ({
@@ -90,7 +91,9 @@ export function closeByHand(
     const existing = t.taskId !== null ? taken.get(t.taskId) : undefined;
     if (existing) {
       if (existing.forwardedFromDayKey === null) {
-        ops.forwardDayTasks.push({ dayTaskId: existing.id, forwardedFromDayKey: b.day.dayKey });
+        // the day note travels; the next-day row keeps its own if it has one (ADR-011)
+        const note = existing.note == null && t.note != null ? { note: t.note } : {};
+        ops.forwardDayTasks.push({ dayTaskId: existing.id, forwardedFromDayKey: b.day.dayKey, ...note });
       }
       continue;
     }
@@ -104,6 +107,7 @@ export function closeByHand(
       budgetSec: 0,
       cue: t.cue,
       treat: t.treat,
+      note: t.note,
       forwardedFromDayKey: b.day.dayKey,
       completedAt: null,
       closeOutcome: null,

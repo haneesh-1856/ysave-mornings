@@ -74,6 +74,27 @@ describe('migrations', () => {
     }
   });
 
+  it('upgrades a database at the chunk 9 fix version: day_tasks.note is added, old rows read null', () => {
+    const folders = fs.readdirSync(MIGRATIONS).filter((f) => fs.statSync(path.join(MIGRATIONS, f)).isDirectory()).sort();
+    const noteMigration = folders.find((f) => f.startsWith('20261031') && f > '20261031072849_purple_dragon_lord')!;
+    expect(noteMigration).toBeDefined();
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'mig-'));
+    for (const f of folders.filter((x) => x < noteMigration)) fs.cpSync(path.join(MIGRATIONS, f), path.join(tmp, f), { recursive: true });
+    const sqlite = new Database(':memory:');
+    try {
+      migrate(drizzle({ client: sqlite }), { migrationsFolder: tmp });
+      sqlite.prepare('INSERT INTO days (dayKey, dayStartHour, createdAt, updatedAt) VALUES (?, ?, ?, ?)').run('2026-10-29', 4, 1, 1);
+      sqlite
+        .prepare('INSERT INTO day_tasks (id, dayKey, topicId, name, colorKey, kind, budgetSec, cue, sortOrder, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .run('d1', '2026-10-29', 't', 'Read', 'study', 'timed', 600, 'After class', 0, 1, 1);
+      migrate(drizzle({ client: sqlite }), { migrationsFolder: MIGRATIONS });
+      expect(sqlite.prepare('SELECT cue, note FROM day_tasks').get()).toEqual({ cue: 'After class', note: null });
+    } finally {
+      sqlite.close();
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   it('applies all migrations to a fresh database', () => {
     const sqlite = new Database(':memory:');
     try {
@@ -82,6 +103,8 @@ describe('migrations', () => {
       expect(cols).toContain('defaultChangedAt');
       const dayCols = (sqlite.prepare('PRAGMA table_info(days)').all() as { name: string }[]).map((c) => c.name);
       expect(dayCols).toContain('planUpdatedAt');
+      const dayTaskCols = (sqlite.prepare('PRAGMA table_info(day_tasks)').all() as { name: string }[]).map((c) => c.name);
+      expect(dayTaskCols).toContain('note');
     } finally {
       sqlite.close();
     }

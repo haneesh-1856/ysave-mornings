@@ -1,6 +1,6 @@
 import {
   addOneOff, buildPlan, canConfirm, confirmPlan, draftableDays, isDraftable, plannableDays, prefillUnplanned,
-  setCue, setTicked, setTreat, stepMinutes,
+  setCue, setNote, setTicked, setTreat, stepMinutes,
 } from '../plan';
 import type { PlanDraft, PlanRow } from '../plan';
 import type { Day, DayTask, Session, Task, Topic } from '../types';
@@ -17,7 +17,7 @@ const task = (id: string, topicId: string, sortOrder: number, extra: Partial<Tas
 });
 const dayTask = (id: string, extra: Partial<DayTask> = {}): DayTask => ({
   id, dayKey: THU, taskId: null, topicId: 'A', name: id, colorKey: 'study', kind: 'timed',
-  budgetSec: 1800, cue: null, treat: null, forwardedFromDayKey: null, completedAt: null,
+  budgetSec: 1800, cue: null, treat: null, note: null, forwardedFromDayKey: null, completedAt: null,
   closeOutcome: null, sortOrder: 0, ...extra,
 });
 const day = (planConfirmedAt: number | null): Day => ({
@@ -342,8 +342,8 @@ describe('confirmPlan', () => {
     expect(out.update).toEqual([]);
     expect(out.deleteIds).toEqual([]);
     expect(out.insert).toEqual([
-      { dayKey: THU, taskId: 'a', topicId: 'A', name: 'a', colorKey: 'study', kind: 'timed', budgetSec: 1800, cue: null, treat: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null, sortOrder: 0 },
-      { dayKey: THU, taskId: 'c', topicId: 'B', name: 'c', colorKey: 'health', kind: 'check', budgetSec: 0, cue: 'q', treat: 'r', forwardedFromDayKey: null, completedAt: null, closeOutcome: null, sortOrder: 2 },
+      { dayKey: THU, taskId: 'a', topicId: 'A', name: 'a', colorKey: 'study', kind: 'timed', budgetSec: 1800, cue: null, treat: null, note: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null, sortOrder: 0 },
+      { dayKey: THU, taskId: 'c', topicId: 'B', name: 'c', colorKey: 'health', kind: 'check', budgetSec: 0, cue: 'q', treat: 'r', note: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null, sortOrder: 2 },
     ]);
   });
 
@@ -395,7 +395,7 @@ describe('confirmPlan', () => {
     const p = dayTask('p', { taskId: 't', completedAt: 7, sortOrder: 3 });
     const q = dayTask('q', { taskId: 'u', sortOrder: 4 });
     const row = (key: string, taskId: string | null, dayTaskId: string | null, minutes = 20): PlanRow => ({
-      key, taskId, topicId: 'A', name: key, colorKey: 'study', kind: 'timed', minutes, cue: 'c', treat: null,
+      key, taskId, topicId: 'A', name: key, colorKey: 'study', kind: 'timed', minutes, cue: 'c', treat: null, note: null,
       ticked: true, reason: 'default', forwardedFromDayKey: null, dayTaskId,
     });
     const draft: PlanDraft = {
@@ -567,5 +567,59 @@ describe('default changed after the plan (chunk 9)', () => {
     const r = confirmPlan(build(tasks, confirmed(100), existing), existing, []);
     expect(r.insert.map((i) => i.taskId)).toEqual(['b']);
     expect(r.deleteIds).toEqual(['c1']);
+  });
+});
+
+describe('day notes (ADR-011)', () => {
+  const lib = task('t', 'A', 1, { note: 'general: bring the book' });
+
+  it('a new row starts with no day note; the library note is never copied in', () => {
+    expect(find(build([lib]), 't').note).toBeNull();
+  });
+
+  it('setNote edits one row, blank becomes null, and the draft is not mutated', () => {
+    const base = build([lib]);
+    const snap = JSON.stringify(base);
+    const d = setNote(base, 't', 'start with ch 3');
+    expect(JSON.stringify(base)).toBe(snap);
+    expect(find(d, 't').note).toBe('start with ch 3');
+    expect(find(setNote(d, 't', '   '), 't').note).toBeNull();
+    expect(setNote(base, 'nope', 'x')).toBe(base);
+  });
+
+  it('confirm writes the note on insert (library row and one-off); the library task is untouched', () => {
+    let d = setNote(build([lib]), 't', 'ch 3 only');
+    d = addOneOff(d, { topicId: 'A', name: 'Call', colorKey: 'study', kind: 'check', minutes: 5 });
+    d = setNote(d, 'oneoff:1', 'ask about the fee');
+    const r = confirmPlan(d, [], []);
+    expect(r.insert.map((i) => [i.name, i.note])).toEqual([['t', 'ch 3 only'], ['Call', 'ask about the fee']]);
+    expect(lib.note).toBe('general: bring the book');
+  });
+
+  it('an existing day row keeps its note in the plan, is edited, and the update carries it', () => {
+    const ex = dayTask('d1', { taskId: 't', note: 'from yesterday' });
+    const d = build([lib], day(5), [ex]);
+    expect(find(d, 'd1').note).toBe('from yesterday');
+    const kept = confirmPlan(d, [ex], []);
+    expect(kept.update[0].note).toBe('from yesterday');
+    const edited = confirmPlan(setNote(d, 'd1', 'changed'), [ex], []);
+    expect(edited.update[0].note).toBe('changed');
+    expect(confirmPlan(setNote(d, 'd1', ''), [ex], []).update[0].note).toBeNull();
+  });
+
+  it('an unconfirmed day attaches its prefilled row note to the library row', () => {
+    const ex = dayTask('d1', { taskId: 't', note: 'prefilled' });
+    expect(find(build([lib], null, [ex]), 't').note).toBe('prefilled');
+  });
+});
+
+describe('addOneOff note (chunk 12)', () => {
+  const base = build([task('t', 'A', 1)]);
+  const spec = { topicId: 'A', name: 'Call bank', colorKey: 'study' as const, kind: 'check' as const, minutes: 15 };
+
+  it('stores the note on the new row; blank or missing becomes null', () => {
+    expect(find(addOneOff(base, { ...spec, note: 'ask about the fee' }), 'oneoff:1').note).toBe('ask about the fee');
+    expect(find(addOneOff(base, { ...spec, note: '  ' }), 'oneoff:1').note).toBeNull();
+    expect(find(addOneOff(base, spec), 'oneoff:1').note).toBeNull();
   });
 });

@@ -149,7 +149,7 @@ describe('bug 02: a moved one-off checklist task arrives in tomorrow', () => {
     setClockOverride(() => dayStartOf(TOMORROW, 4) + 6 * 3_600_000);
     reconcile();
     await renderThemed(<TodayScreen />);
-    expect(screen.getByRole('checkbox', { name: 'A' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'A, checklist, open' })).toBeTruthy();
     expect(screen.getByText('from Friday')).toBeTruthy();
   });
 });

@@ -1,0 +1,1 @@
+ALTER TABLE `day_tasks` ADD `note` text;

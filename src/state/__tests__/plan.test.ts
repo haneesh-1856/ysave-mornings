@@ -2,12 +2,11 @@ import { act, renderHook } from '@testing-library/react-native';
 import { getDay, loadDayBundle, setCheckCompleted } from '../../data/repos/days';
 import { applyOps } from '../../data/repos/ops';
 import { setDayStartHour } from '../../data/repos/settings';
-import { getTask } from '../../data/repos/tasks';
 import { startSession } from '../../data/repos/sessions';
 import type { DB } from '../../data/types';
 import { dayStartOf } from '../../domain/dayKey';
 import type { PlanDraft } from '../../domain/plan';
-import { confirmDayPlan, setTaskNoteFromPlan } from '../actions/plan';
+import { confirmDayPlan } from '../actions/plan';
 import { createTask, createTopic, removeTask } from '../actions/library';
 import { setClockOverride } from '../clock';
 import { ValidationError } from '../errors';
@@ -400,14 +399,6 @@ describe('confirmDayPlan', () => {
       confirmDayPlan(TOMORROW, result.current.draft!);
     });
     expect(plan.result.current.rows).toHaveLength(2);
-  });
-});
-
-describe('setTaskNoteFromPlan', () => {
-  it('edits the library task note', () => {
-    const { daily } = seed();
-    setTaskNoteFromPlan(daily.id, 'bring book');
-    expect(getTask(db, daily.id)!.note).toBe('bring book');
   });
 });
 

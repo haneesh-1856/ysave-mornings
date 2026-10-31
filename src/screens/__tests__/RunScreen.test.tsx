@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { act, fireEvent, screen } from '@testing-library/react-native';
 
-import { loadDayBundle } from '@/data/repos/days';
+import { getDayTask, loadDayBundle } from '@/data/repos/days';
 import { applyOps } from '@/data/repos/ops';
 import { getTask } from '@/data/repos/tasks';
 import type { Session } from '@/domain/types';
@@ -65,7 +65,7 @@ let clock = T0;
 function row(topicId: string, name: string, over: Partial<PlanRow> = {}): PlanRow {
   return {
     key: `k-${name}`, taskId: null, topicId, name, colorKey: 'study', kind: 'timed', minutes: 5, cue: null,
-    treat: null, ticked: true, reason: 'one_off', forwardedFromDayKey: null, dayTaskId: null, ...over,
+    treat: null, note: null, ticked: true, reason: 'one_off', forwardedFromDayKey: null, dayTaskId: null, ...over,
   };
 }
 
@@ -286,35 +286,38 @@ describe('RunScreen', () => {
     expect(allSessions().filter((s) => s.endedAt === null)).toHaveLength(1);
   });
 
-  it('edits the note inline: debounced save, flushed when leaving', async () => {
+  it('edits the day note inline: debounced save to day_tasks.note, flushed when leaving, library note untouched', async () => {
     const { read, libId } = plan();
     await renderThemed(<RunScreen dayTaskId={read} />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Add a note' }));
-    await fireEvent.changeText(screen.getByLabelText('Note'), 'Chapter 3');
-    const noteOf = () => getTask(getDb(), libId)?.note;
+    await fireEvent.press(screen.getByRole('button', { name: 'Note for Thursday. Tap to add a note' }));
+    await fireEvent.changeText(screen.getByLabelText('Note for Thursday'), 'Chapter 3');
+    const noteOf = () => getDayTask(getDb(), read)?.note;
     expect(noteOf()).not.toBe('Chapter 3');
     await advance(700);
     expect(noteOf()).toBe('Chapter 3');
-    await fireEvent.changeText(screen.getByLabelText('Note'), 'Chapter 4');
+    await fireEvent.changeText(screen.getByLabelText('Note for Thursday'), 'Chapter 4');
     await fireEvent.press(screen.getByRole('button', { name: 'Today' })); // leave flushes
     expect(noteOf()).toBe('Chapter 4');
+    expect(getTask(getDb(), libId)?.note).toBe('');
   });
 
-  it('shows no note card for a one-off task', async () => {
+  it('a one-off task has a day note too, and no library note', async () => {
     const { other } = plan();
     await renderThemed(<RunScreen dayTaskId={other} />);
-    expect(screen.queryByRole('button', { name: 'Add a note' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Note for Thursday. Tap to add a note' })).toBeTruthy();
+    expect(screen.queryByText('Library note')).toBeNull();
   });
 
-  it('invalid ids and checklist tasks show the not-running state with Back', async () => {
+  it('an invalid id or no id shows the not-on-the-list state with Back; a checklist task opens its page', async () => {
     const { tick } = plan();
     const view = await renderThemed(<RunScreen dayTaskId="nope" />);
-    expect(screen.getByText("This task isn't running today")).toBeTruthy();
+    expect(screen.getByText("This task isn't on today's list")).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Back' }));
     expect(mockDismissTo).toHaveBeenCalledWith('/(tabs)/today');
-    await view.rerender(<RunScreen dayTaskId={tick} />);
-    expect(screen.getByText("This task isn't running today")).toBeTruthy();
     await view.rerender(<RunScreen dayTaskId={undefined} />);
-    expect(screen.getByText("This task isn't running today")).toBeTruthy();
+    expect(screen.getByText("This task isn't on today's list")).toBeTruthy();
+    await view.rerender(<RunScreen dayTaskId={tick} />);
+    expect(screen.getByText('To do')).toBeTruthy();
+    expect(screen.queryByText('min left')).toBeNull();
   });
 });

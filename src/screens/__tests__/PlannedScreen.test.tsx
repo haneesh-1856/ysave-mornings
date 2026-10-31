@@ -61,7 +61,7 @@ function closeToday() {
 function row(topicId: string, name: string, over: Partial<PlanRow> = {}): PlanRow {
   return {
     key: `k-${name}`, taskId: null, topicId, name, colorKey: 'study', kind: 'timed', minutes: 45, cue: null,
-    treat: null, ticked: true, reason: 'one_off', forwardedFromDayKey: null, dayTaskId: null, ...over,
+    treat: null, note: null, ticked: true, reason: 'one_off', forwardedFromDayKey: null, dayTaskId: null, ...over,
   };
 }
 

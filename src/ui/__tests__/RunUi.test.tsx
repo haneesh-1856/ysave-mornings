@@ -56,17 +56,21 @@ describe('TaskRow', () => {
 });
 
 describe('CheckRow', () => {
-  it('toggles and shows the forwarded text', async () => {
-    const onToggle = jest.fn();
-    await renderThemed(<CheckRow name="Stretch" topicColor="health" done={false} forwardedFrom="Thursday" onToggle={onToggle} />);
+  it('opens on press, says checklist after the name and shows the forwarded text', async () => {
+    const onPress = jest.fn();
+    await renderThemed(<CheckRow name="Stretch" topicColor="health" done={false} forwardedFrom="Thursday" onPress={onPress} />);
     expect(screen.getByText('from Thursday')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('checkbox', { name: 'Stretch' }));
-    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('checklist')).toBeTruthy();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Stretch, checklist, open' }));
+    expect(onPress).toHaveBeenCalledTimes(1);
   });
-  it('omits forwarded text and reflects done', async () => {
-    await renderThemed(<CheckRow name="Stretch" topicColor="health" done onToggle={() => {}} />);
+  it('omits forwarded text and shows done with a check mark', async () => {
+    await renderThemed(<CheckRow name="Stretch" topicColor="health" done onPress={() => {}} />);
     expect(screen.queryByText(/from /)).toBeNull();
-    expect(screen.getByRole('checkbox', { name: 'Stretch' }).props.accessibilityState).toMatchObject({ checked: true });
+    expect(screen.getByRole('button', { name: 'Stretch, done' })).toBeTruthy();
+    expect(screen.getByText('done')).toBeTruthy();
+    expect(screen.getByTestId('done-check')).toBeTruthy();
   });
 });
 

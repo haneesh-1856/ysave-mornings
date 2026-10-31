@@ -167,24 +167,21 @@ describe('PlanScreen', () => {
     expect(getDay(getDb(), '2026-10-29')!.planConfirmedAt).toBe(first);
   });
 
-  it('saves a note to the library task after the debounce', async () => {
+  it('the Note field edits this day only: Confirm stores it on the day row, the library note is untouched', async () => {
     const { read } = seed();
-    jest.useFakeTimers();
-    try {
-      await renderThemed(<PlanScreen />);
-      await fireEvent.press(screen.getByRole('button', { name: 'Edit Read for Friday' }));
-      await fireEvent.changeText(screen.getByLabelText('Note'), 'chapter 3');
-      expect(getTask(getDb(), read.id)?.note).toBe('');
-      await act(async () => {
-        jest.advanceTimersByTime(450);
-      });
-      expect(getTask(getDb(), read.id)?.note).toBe('chapter 3');
-    } finally {
-      jest.useRealTimers();
-    }
+    setTaskNote(read.id, 'general: bring the book');
+    await renderThemed(<PlanScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Edit Read for Friday' }));
+    expect(screen.getByText('Library note: general: bring the book')).toBeTruthy();
+    expect(screen.getByLabelText('Note for Friday').props.value).toBe('');
+    await fireEvent.changeText(screen.getByLabelText('Note for Friday'), 'chapter 3 only');
+    expect(getTask(getDb(), read.id)?.note).toBe('general: bring the book'); // nothing written before Confirm
+    await fireEvent.press(screen.getByRole('button', { name: 'Friday looks like this ✓' }));
+    expect(loadDayBundle(getDb(), '2026-10-30')!.dayTasks.find(d => d.name === 'Read')!.note).toBe('chapter 3 only');
+    expect(getTask(getDb(), read.id)?.note).toBe('general: bring the book');
   });
 
-  it('a one-off row has no Note field', async () => {
+  it('a one-off row has a Note field too, stored on its day row', async () => {
     seed();
     await renderThemed(<PlanScreen />);
     await fireEvent.press(screen.getByRole('button', { name: 'Add a one-off task' }));
@@ -192,32 +189,41 @@ describe('PlanScreen', () => {
     await fireEvent.press(screen.getByRole('radio', { name: 'Study' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Add' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Edit Dentist call for Friday' }));
-    expect(screen.getByLabelText('After class')).toBeTruthy(); // the row really is expanded
-    expect(screen.queryByLabelText('Note')).toBeNull();
+    expect(screen.queryByText(/^Library note:/)).toBeNull();
+    await fireEvent.changeText(screen.getByLabelText('Note for Friday'), 'ask about the fee');
+    await fireEvent.press(screen.getByRole('button', { name: 'Friday looks like this ✓' }));
+    expect(loadDayBundle(getDb(), '2026-10-30')!.dayTasks.find(d => d.name === 'Dentist call')!.note).toBe('ask about the fee');
   });
 
-  it('shows the library note when a row expands and a new topic appears live', async () => {
+  it('reopening a confirmed plan shows the stored day note, and an edit replaces it', async () => {
+    const { read } = seed();
+    const first = await renderThemed(<PlanScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Edit Read for Friday' }));
+    await fireEvent.changeText(screen.getByLabelText('Note for Friday'), 'first');
+    await fireEvent.press(screen.getByRole('button', { name: 'Friday looks like this ✓' }));
+    await first.unmount();
+    await renderThemed(<PlanScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Edit Read for Friday' }));
+    expect(screen.getByLabelText('Note for Friday').props.value).toBe('first');
+    await fireEvent.changeText(screen.getByLabelText('Note for Friday'), 'second');
+    await fireEvent.press(screen.getByRole('button', { name: 'Friday looks like this ✓' }));
+    expect(loadDayBundle(getDb(), '2026-10-30')!.dayTasks.find(d => d.name === 'Read')!.note).toBe('second');
+    expect(getTask(getDb(), read.id)?.note).toBe('');
+  });
+
+  it('shows the library note read-only when a row expands, and a new topic appears live', async () => {
     const { read } = seed();
     setTaskNote(read.id, 'ch 2');
     await renderThemed(<PlanScreen />);
     await fireEvent.press(screen.getByRole('button', { name: 'Edit Read for Friday' }));
-    expect(screen.getByLabelText('Note').props.value).toBe('ch 2');
+    expect(screen.getByText('Library note: ch 2')).toBeTruthy();
+    expect(screen.getByLabelText('Note for Friday').props.value).toBe('');
     await fireEvent.press(screen.getByRole('button', { name: 'Add a one-off task' }));
     expect(screen.queryByRole('radio', { name: 'Home' })).toBeNull();
     await act(async () => {
       createTopic({ name: 'Home', colorKey: 'home' });
     });
     expect(screen.getByRole('radio', { name: 'Home' })).toBeTruthy();
-  });
-
-  it('flushes a pending note when the row collapses', async () => {
-    const { read } = seed();
-    await renderThemed(<PlanScreen />);
-    const edit = screen.getByRole('button', { name: 'Edit Read for Friday' });
-    await fireEvent.press(edit);
-    await fireEvent.changeText(screen.getByLabelText('Note'), 'quick');
-    await fireEvent.press(edit);
-    expect(getTask(getDb(), read.id)?.note).toBe('quick');
   });
 
   describe('draft mode (a day after tomorrow)', () => {

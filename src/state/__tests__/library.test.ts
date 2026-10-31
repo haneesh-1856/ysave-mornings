@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { ValidationError } from '../../data/errors';
 import { getTask, listTasks } from '../../data/repos/tasks';
-import { listTopics } from '../../data/repos/topics';
+import { listUserTopics } from '../../data/repos/topics';
 import {
   DEFAULT_TASK, createTask, createTopic, moveTopic, removeTask, removeTopic, setTaskNote, updateTask, updateTopic,
 } from '../actions/library';
@@ -33,7 +33,7 @@ describe('topic actions', () => {
   it('createTopic writes and bumps topics only', () => {
     const t = createTopic({ name: ' Study ', colorKey: 'study' });
     expect(t.name).toBe('Study');
-    expect(listTopics(db)).toHaveLength(1);
+    expect(listUserTopics(db)).toHaveLength(1);
     expect(v()).toMatchObject({ topics: 1, tasks: 0, days: 0 });
   });
 
@@ -57,7 +57,7 @@ describe('topic actions', () => {
     const a = createTopic({ name: 'A', colorKey: 'home' });
     const b = createTopic({ name: 'B', colorKey: 'sun' });
     const c = createTopic({ name: 'C', colorKey: 'study' });
-    const names = () => listTopics(db).map((t) => t.name).join('');
+    const names = () => listUserTopics(db).map((t) => t.name).join('');
     const before = v().topics;
     moveTopic(a.id, -1);
     moveTopic(c.id, 1);
@@ -77,7 +77,7 @@ describe('topic actions', () => {
     const k = createTask(t.id, { name: 'Do' });
     const before = v();
     removeTopic(t.id);
-    expect(listTopics(db)).toEqual([]);
+    expect(listUserTopics(db)).toEqual([]);
     expect(listTasks(db)).toEqual([]);
     expect(getTask(db, k.id)?.deletedAt).toBe(5000);
     expect(v().topics).toBe(before.topics + 1);

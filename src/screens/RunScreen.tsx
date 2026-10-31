@@ -1,18 +1,19 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { AppState, Pressable, View } from 'react-native';
 
 import { extraMinutesLabel, isGold, minutesLeftLabel, overtimeMs, remainingMs } from '@/domain/timer';
 import type { DayTask, Session } from '@/domain/types';
-import { setTaskNoteFromPlan } from '@/state/actions/plan';
-import { pauseTask, startTask, stopTask } from '@/state/actions/run';
+import { setDayTaskNote } from '@/state/actions/plan';
+import { pauseTask, startTask, stopTask, toggleCheckTask } from '@/state/actions/run';
 import { now } from '@/state/clock';
 import { ValidationError } from '@/state/errors';
 import { useNow } from '@/state/hooks/useNow';
 import { useRunTask } from '@/state/hooks/useRunTask';
 import { useSubmitGuard } from '@/state/hooks/useSubmitGuard';
 import { useToday } from '@/state/hooks/useToday';
+import type { TodayRow } from '@/state/hooks/useToday';
 import { useTheme } from '@/theme/ThemeProvider';
 import { BigNumber } from '@/ui/BigNumber';
 import { Button } from '@/ui/Button';
@@ -20,6 +21,7 @@ import { Card } from '@/ui/Card';
 import { Celebration } from '@/ui/Celebration';
 import { Collection } from '@/ui/collection/Collection';
 import { CountdownBar } from '@/ui/CountdownBar';
+import { weekdayName } from '@/ui/dayNames';
 import { Header } from '@/ui/Header';
 import { Screen } from '@/ui/Screen';
 import { T } from '@/ui/T';
@@ -32,6 +34,7 @@ const KEEP_AWAKE_TAG = 'run-screen';
 
 const STATE_LABEL = {
   idle: 'Ready', running: 'Running', paused: 'Paused', overtime: 'Done · still going', stopped: 'Done',
+  'check-open': 'To do', 'check-done': 'Done',
 } as const;
 
 // Leaving Run never pauses (doc 04 section 4): the session keeps running from its stored timestamp.
@@ -43,14 +46,15 @@ export function RunRoute() {
   return <RunScreen dayTaskId={dayTaskId} />;
 }
 
+/** The task page: one day task, timed or checklist, with its notes and its action. Read-only once the day is closed. */
 export function RunScreen({ dayTaskId }: { dayTaskId: string | undefined }) {
   const run = useRunTask(dayTaskId ?? '');
   const row = run?.row ?? null;
-  if (!dayTaskId || !row || row.dayTask.kind !== 'timed') {
+  if (!dayTaskId || !row) {
     return (
       <Screen>
-        <Header title="This task isn't running today" />
-        <T>It is not on today&apos;s list, or it is a checklist task (tick those on Today).</T>
+        <Header title="This task isn't on today's list" />
+        <T>It may have been moved or removed.</T>
         <Button label="Back" onPress={goToday} />
       </Screen>
     );
@@ -58,23 +62,25 @@ export function RunScreen({ dayTaskId }: { dayTaskId: string | undefined }) {
   return (
     <RunBody
       dayTask={row.dayTask}
-      state={row.state === 'check-open' || row.state === 'check-done' ? 'idle' : row.state}
+      state={row.state}
       sessions={row.sessions}
       topicName={row.topicName}
-      note={run?.note ?? ''}
+      libraryNote={run?.note ?? ''}
+      closed={run?.day?.closedAt != null}
     />
   );
 }
 
 type BodyProps = {
   dayTask: DayTask;
-  state: 'idle' | 'running' | 'paused' | 'overtime' | 'stopped';
+  state: TodayRow['state'];
   sessions: Session[];
   topicName: string;
-  note: string;
+  libraryNote: string;
+  closed: boolean;
 };
 
-function RunBody({ dayTask, state, sessions, topicName, note }: BodyProps) {
+function RunBody({ dayTask, state, sessions, topicName, libraryNote, closed }: BodyProps) {
   const t = useTheme();
   const { day, items } = useToday();
   const done = dayTask.completedAt !== null;
@@ -106,13 +112,20 @@ function RunBody({ dayTask, state, sessions, topicName, note }: BodyProps) {
     }
   };
 
-  const noteEditor = useNoteEditor(dayTask.taskId, note);
+  const noteEditor = useNoteEditor(dayTask.id, dayTask.note ?? '');
+  const weekday = weekdayName(dayTask.dayKey);
   const leave = () => { noteEditor.flush(); goToday(); };
 
+  const timed = dayTask.kind === 'timed';
   const gold = state === 'stopped' && isGold(dayTask.budgetSec, sessions, now());
 
   let button;
-  if (state === 'idle') button = <Button testID="run-start" label="Start" disabled={guard.busy} onPress={() => act(startTask)} />;
+  if (closed) button = <Button label="Back to Today" onPress={leave} />;
+  else if (!timed) {
+    button = done
+      ? <Button label="Mark not done" kind="ghost" disabled={guard.busy} onPress={() => act(toggleCheckTask)} />
+      : <Button testID="task-mark-done" label="Mark done" disabled={guard.busy} onPress={() => act(toggleCheckTask)} />;
+  } else if (state === 'idle') button = <Button testID="run-start" label="Start" disabled={guard.busy} onPress={() => act(startTask)} />;
   else if (state === 'running') button = <Button label="Pause" kind="ghost" disabled={guard.busy} onPress={() => act(pauseTask)} />;
   else if (state === 'paused') button = <Button label="Resume" disabled={guard.busy} onPress={() => act(startTask)} />;
   else if (state === 'overtime') button = <Button label="Stop" disabled={guard.busy} onPress={() => act(stopTask)} />;
@@ -135,9 +148,17 @@ function RunBody({ dayTask, state, sessions, topicName, note }: BodyProps) {
           <T variant="sub" weight="bold">{`Treat: ${dayTask.treat}`}</T>
         </View>
       ) : null}
-      {dayTask.taskId ? <NoteCard editor={noteEditor} /> : null}
+      {dayTask.forwardedFromDayKey ? <T variant="sub">{`from ${weekdayName(dayTask.forwardedFromDayKey)}`}</T> : null}
+      {closed ? <T variant="sub">Today is closed. It is read-only now.</T> : null}
+      {libraryNote ? (
+        <Card>
+          <T variant="label">Library note</T>
+          <T>{libraryNote}</T>
+        </Card>
+      ) : null}
+      <NoteCard editor={noteEditor} weekday={weekday} readOnly={closed} />
 
-      <RunClock dayTask={dayTask} sessions={sessions} />
+      {timed ? <RunClock dayTask={dayTask} sessions={sessions} /> : null}
       <Celebration visible={done} />
       {gold ? <T weight="bold" color="accent" style={{ textAlign: 'center' }}>Gold ring earned</T> : null}
       {error ? <T variant="sub" color="danger" accessibilityRole="alert" style={{ textAlign: 'center' }}>{error}</T> : null}
@@ -179,8 +200,8 @@ function ClockFace({ dayTask, sessions, at }: { dayTask: DayTask; sessions: Sess
 
 type NoteEditor = { text: string; editing: boolean; error: string | null; begin(): void; change(s: string): void; flush(): void };
 
-/** Note draft with a debounced save to the library task (setTaskNoteFromPlan); flushed on leave and unmount. */
-function useNoteEditor(taskId: string | null, saved: string): NoteEditor {
+/** The day note's draft: raw text while editing (the action turns blank into null), saved after a pause and on leave/unmount. */
+function useNoteEditor(dayTaskId: string, saved: string): NoteEditor {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(saved);
   const [error, setError] = useState<string | null>(null);
@@ -193,18 +214,23 @@ function useNoteEditor(taskId: string | null, saved: string): NoteEditor {
       timer.current = null;
     }
     const value = pending.current;
-    if (value === null || taskId === null) return;
+    if (value === null) return;
     pending.current = null;
     try {
-      setTaskNoteFromPlan(taskId, value);
+      setDayTaskNote(dayTaskId, value);
       setError(null);
     } catch (e) {
       if (e instanceof ValidationError) setError(e.message);
       else throw e;
     }
-  }, [taskId]);
+  }, [dayTaskId]);
 
   useEffect(() => flush, [flush]); // unmount flush
+  useEffect(() => {
+    // Backgrounding may be the last chance before the OS kills the app.
+    const sub = AppState.addEventListener('change', (s) => { if (s !== 'active') flush(); });
+    return () => sub.remove();
+  }, [flush]);
 
   return {
     text: editing ? draft : saved,
@@ -224,18 +250,28 @@ function useNoteEditor(taskId: string | null, saved: string): NoteEditor {
   };
 }
 
-function NoteCard({ editor }: { editor: NoteEditor }) {
+function NoteCard({ editor, weekday, readOnly }: { editor: NoteEditor; weekday: string; readOnly: boolean }) {
+  const label = `Note for ${weekday}`;
+  if (readOnly) {
+    if (!editor.text) return null;
+    return (
+      <Card>
+        <T variant="label">{label}</T>
+        <T>{editor.text}</T>
+      </Card>
+    );
+  }
   if (editor.editing) {
     return (
       <Card>
-        <TextField label="Note" value={editor.text} onChangeText={editor.change} maxLength={NOTE_MAX} multiline error={editor.error ?? undefined} />
+        <TextField label={label} value={editor.text} onChangeText={editor.change} maxLength={NOTE_MAX} multiline error={editor.error ?? undefined} />
       </Card>
     );
   }
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={editor.text ? `Note: ${editor.text}. Tap to edit` : 'Add a note'} onPress={editor.begin}>
+    <Pressable accessibilityRole="button" accessibilityLabel={editor.text ? `${label}: ${editor.text}. Tap to edit` : `${label}. Tap to add a note`} onPress={editor.begin}>
       <Card>
-        <T variant="label">Note</T>
+        <T variant="label">{label}</T>
         <T variant={editor.text ? 'body' : 'sub'}>{editor.text || 'Tap to add a note'}</T>
       </Card>
     </Pressable>

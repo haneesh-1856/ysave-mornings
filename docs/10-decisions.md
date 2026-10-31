@@ -61,3 +61,26 @@ tomorrow can be planned, without that meaning the day is planned.
 (today stays editable per ADR-009) and the day counts as unplanned.
 **Trade-off:** one more column (`days.planDraftedAt`) and a draft mode on the Plan screen; in return the existing
 plan, confirm and rollover rules stay unchanged for confirmed plans.
+
+### ADR-011 · Day notes are separate from the library note (product decision, 2026-10-31)
+**Context:** in the phone check the user wanted a note to be addable anywhere but always reflected in Today: the
+library note is the task's general note, tomorrow's plan note says what to do tomorrow, today's edit note is an
+action for that task. A note typed while planning must not leak into the library.
+**Decision:** `day_tasks.note` holds the per-day note, written by Plan (draft/confirm) and by Today. Plan and the
+Library editor no longer share one field: the library note stays on `tasks.note`, read-only in Plan. The day note
+travels when a task is moved to the next day.
+**Trade-off:** one more nullable column (`day_tasks.note`) and one more field in the plan row; in return a
+one-off row can carry a note and nobody's library gets overwritten by a one-day remark.
+
+### ADR-012 · A task may have no topic: one built-in "No topic" (product decision, 2026-10-31)
+**Context:** in the phone check the user could not add a one-off task without choosing a topic, and wanted the same in
+the Library: topics are optional there too.
+**Decision:** a single built-in topic row, `id = 'no-topic'` (`NO_TOPIC_ID`), name "No topic", neutral colour `none`,
+created by a migration (`INSERT OR IGNORE`, so fresh installs and upgrades both get exactly one) and listed after every
+user topic. `tasks.topicId` and `day_tasks.topicId` stay NOT NULL, so every grouping (Plan, Today, calendar, close
+summary, stats) works unchanged. It can't be renamed, recoloured or deleted (the repo refuses), has no edit screen, is
+offered first and pre-selected in topic pickers, and is never counted as one of the user's topics (onboarding, "No
+topics yet", the Topics header). In the Library it is listed only while it holds a live task. A library task can move
+between topics (`updateTask` with `topicId`, to the end of the target).
+**Trade-off:** one special row that a few screens must know about (filter it from "your topics", hide its edit button);
+in return no nullable `topicId`, no migration of old rows, and nothing that groups by topic needs a second code path.

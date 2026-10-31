@@ -13,7 +13,7 @@ const sess = (id: string, start: number, end: number | null, dayTaskId = 'a'): S
 });
 const dt = (over: Partial<DayTask> = {}): DayTask => ({
   id: 'a', dayKey: '2026-10-29', taskId: null, topicId: 't', name: 'x', colorKey: 'study', kind: 'timed',
-  budgetSec: 600, cue: null, treat: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null,
+  budgetSec: 600, cue: null, treat: null, note: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null,
   sortOrder: 0, ...over,
 });
 const day = (over: Partial<Day> = {}): Day => ({

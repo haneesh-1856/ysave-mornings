@@ -9,8 +9,11 @@ type PaletteTokens = Omit<(typeof palettes)[keyof typeof palettes], 'name'>;
 export type ColorName = keyof PaletteTokens;
 /** Palette colours as plain strings: a tint other than "match" derives them. */
 export type Palette = Colors;
-export type TopicColorKey = 'study' | 'health' | 'home' | 'sun' | 'c4' | 'c5';
-export const TOPIC_COLOR_KEYS: TopicColorKey[] = ['study', 'health', 'home', 'sun', 'c4', 'c5'];
+/** The six colours a user picks for a topic. */
+export type PickableColorKey = 'study' | 'health' | 'home' | 'sun' | 'c4' | 'c5';
+export const TOPIC_COLOR_KEYS: PickableColorKey[] = ['study', 'health', 'home', 'sun', 'c4', 'c5'];
+/** Plus 'none', the neutral colour of the built-in No topic (the muted ink colour; ADR-012). */
+export type TopicColorKey = PickableColorKey | 'none';
 
 export type Theme = ReturnType<typeof buildTheme>;
 
@@ -73,7 +76,11 @@ export function buildTheme(look: LookMix, opts: { reduceTransparency?: boolean; 
     c,
     isDark: luminance(c.bg) < 0.2,
     /** Topic color and its fold background (topic 30% over the page). */
-    topic: (key: TopicColorKey) => ({ color: c[key], fold: colorMix(c[key], 30, c.bg) }),
+    topic: (key: TopicColorKey) => {
+      // No topic: muted ink, and a fold that stays the page colour (muted text only holds 4.5:1 on the bare page)
+      if (key === 'none') return { color: c.muted, fold: c.bg };
+      return { color: c[key], fold: colorMix(c[key], 30, c.bg) };
+    },
     radius: { r: pct(shape.r), rb: pct(shape.rb) },
     font: FONT_SETS[look.font] as FontSet,
     motion: { duration: motion.dur, bezier: parseBezier(motion.ease) },

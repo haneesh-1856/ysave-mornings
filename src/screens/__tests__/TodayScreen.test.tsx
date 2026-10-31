@@ -69,7 +69,7 @@ afterEach(() => {
 function row(topicId: string, name: string, over: Partial<PlanRow> = {}): PlanRow {
   return {
     key: `k-${name}`, taskId: null, topicId, name, colorKey: 'study', kind: 'timed', minutes: 5, cue: null,
-    treat: null, ticked: true, reason: 'one_off', forwardedFromDayKey: null, dayTaskId: null, ...over,
+    treat: null, note: null, ticked: true, reason: 'one_off', forwardedFromDayKey: null, dayTaskId: null, ...over,
   };
 }
 
@@ -135,16 +135,15 @@ describe('Today: header and rows', () => {
     expect(typeof arg.params.dayTaskId).toBe('string');
   });
 
-  it('toggles a checklist row with a light haptic and updates the count', async () => {
+  it('pushes the run route for a checklist row too, and does not tick it', async () => {
     plan(TODAY);
     await renderThemed(<TodayScreen />);
-    await fireEvent.press(screen.getByRole('checkbox', { name: 'Sums' }));
-    expect(Haptics.impactAsync).toHaveBeenCalledWith('light');
-    expect(screen.getByText('1 of 4 done')).toBeTruthy();
-    expect(screen.getByRole('checkbox', { name: 'Sums', checked: true })).toBeTruthy();
-    await fireEvent.press(screen.getByRole('checkbox', { name: 'Sums' }));
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+    await fireEvent.press(screen.getByRole('button', { name: 'Sums, checklist, open' }));
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect((mockPush.mock.calls[0][0] as { pathname: string }).pathname).toBe('/run/[dayTaskId]');
     expect(screen.getByText('0 of 4 done')).toBeTruthy();
-    expect(mockPush).not.toHaveBeenCalled();
+    expect(Haptics.impactAsync).not.toHaveBeenCalled();
   });
 });
 
@@ -246,7 +245,7 @@ describe('Today: entry cards', () => {
 });
 
 describe('Today: closed day', () => {
-  it('is read-only: banner, no Edit, no Plan today, rows do nothing', async () => {
+  it('is read-only: banner, no Edit, no Plan today, rows still open the (read-only) task page', async () => {
     plan(TODAY);
     closeToday();
     await renderThemed(<TodayScreen />);
@@ -255,12 +254,11 @@ describe('Today: closed day', () => {
     expect(screen.queryByRole('button', { name: 'Plan today' })).toBeNull();
     expect(screen.getByRole('button', { name: "See today's plan" })).toBeTruthy();
     const timed = screen.getByRole('button', { name: 'Read, 5 minutes, start' });
-    const check = screen.getByRole('checkbox', { name: 'Sums' });
-    expect(timed).toBeDisabled();
-    expect(check).toBeDisabled();
+    const check = screen.getByRole('button', { name: 'Sums, checklist, open' });
+    expect(timed).not.toBeDisabled();
     await fireEvent.press(timed);
     await fireEvent.press(check);
-    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledTimes(2);
     expect(Haptics.impactAsync).not.toHaveBeenCalled();
     expect(screen.getByText('0 of 4 done')).toBeTruthy();
   });
@@ -290,14 +288,14 @@ describe('Today: chain and Close button', () => {
     expect(screen.queryByRole('button', { name: 'Close today' })).toBeNull();
   });
 
-  it('announces closed-day rows as disabled', async () => {
+  it('does not announce closed-day rows as disabled', async () => {
     plan(TODAY);
     closeToday();
     await renderThemed(<TodayScreen />);
     const disabled = (label: string) =>
       screen.getAllByLabelText(label).some((n) => (n.props as { accessibilityState?: { disabled?: boolean } }).accessibilityState?.disabled === true);
-    expect(disabled('Read, 5 minutes, start')).toBe(true);
-    expect(disabled('Sums')).toBe(true);
+    expect(disabled('Read, 5 minutes, start')).toBe(false);
+    expect(disabled('Sums, checklist, open')).toBe(false);
   });
 });
 

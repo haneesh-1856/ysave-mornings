@@ -3,7 +3,7 @@ import { fireEvent, screen } from '@testing-library/react-native';
 import { launchHref } from '@/app/index';
 import { getDayStartHour } from '@/data/repos/settings';
 import { listTasks } from '@/data/repos/tasks';
-import { listTopics } from '@/data/repos/topics';
+import { listUserTopics } from '@/data/repos/topics';
 import { dayStartOf } from '@/domain/dayKey';
 import { createTopic } from '@/state/actions/library';
 import { getDb } from '@/state/dbRef';
@@ -88,7 +88,7 @@ describe('OnboardingScreen', () => {
 
     const db = getDb();
     expect(getDayStartHour(db)).toBe(6);
-    const topics = listTopics(db);
+    const topics = listUserTopics(db);
     expect(topics.map(x => [x.name, x.colorKey])).toEqual([['Study', 'health']]);
     const tasks = listTasks(db, topics[0].id);
     expect(tasks.map(x => [x.name, x.kind, x.minutes])).toEqual([['Read', 'timed', 45]]);
@@ -107,7 +107,7 @@ describe('OnboardingScreen', () => {
     expect(screen.getByText('Task: Tidy (Checklist)')).toBeTruthy();
     await press('Plan today');
     const db = getDb();
-    expect(listTasks(db, listTopics(db)[0].id).map(x => x.kind)).toEqual(['check']);
+    expect(listTasks(db, listUserTopics(db)[0].id).map(x => x.kind)).toEqual(['check']);
   });
 
   it('"I\'ll set it up myself" skips and opens Today without creating data', async () => {
@@ -115,7 +115,7 @@ describe('OnboardingScreen', () => {
     await press("I'll set it up myself");
     expect(mockReplace).toHaveBeenCalledWith('/today');
     expect(needsOnboarding()).toBe(false);
-    expect(listTopics(getDb())).toEqual([]);
+    expect(listUserTopics(getDb())).toEqual([]);
   });
 
   it('preview mode walks every step but saves nothing and goes back', async () => {
@@ -130,7 +130,7 @@ describe('OnboardingScreen', () => {
     await press('Plan today');
     expect(mockBack).toHaveBeenCalledTimes(1);
     expect(mockReplace).not.toHaveBeenCalled();
-    expect(listTopics(getDb())).toEqual([]);
+    expect(listUserTopics(getDb())).toEqual([]);
     expect(needsOnboarding()).toBe(true);
   });
 

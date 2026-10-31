@@ -26,12 +26,19 @@ Rows, grouped by topic in library order:
 | Repeats on target weekday, not default | topic group | no ("repeats <Fri> · not a default") |
 | Doesn't repeat that weekday | "Not on <Fridays>" group | no (you can add it once) |
 | Forwarded checklist task from the previous day | its topic group | **yes** ("from <Thursday>") |
-| One-off task added in planning | its topic group | yes ("just for <Friday>") |
+| One-off task added in planning | its topic group ("No topic" unless one is picked) | yes ("just for <Friday>") |
 
 - If the day already has a confirmed plan, its saved rows (with their per-day minutes/cue/treat) are
   the starting state, and library tasks not in it appear unticked.
-- Per-day edits (minutes ±5 within 5–180, cue, treat) change only the plan row, never the library.
-  **Note edits change the library task's note** (one note per task).
+- Per-day edits (minutes ±5 within 5–180, cue, treat, **note**) change only the plan row, never the library.
+- **Notes (ADR-011).** Two kinds. The library task's `note` is the *general* note for the task, edited in the Library
+  task editor. A day row's `note` is *that day's* note: in a plan it says what to do on that day, on Today it can be
+  an action to take on the task. A note typed in Plan (today, tomorrow or a later draft) or on Today is a day note
+  and is **never** copied to the library; the library note is never copied into a day note. Every row can have one,
+  including one-offs. Plan shows the library note read-only above the field ("Library note: ..."). A day note is
+  saved with the draft or Confirm like cue/treat, and editable on a stored row while its day is open. **It travels
+  with a moved task**: closeByHand copies it to the new next-day row, or fills an existing next-day row that has no
+  note (a note already there is kept).
 - Unconfirmed edits live in memory only. Leaving the screen discards them.
 - **Confirm** is enabled when ≥1 row is ticked. It replaces that day's `day_tasks` with the ticked rows,
   keeping any rows that already have sessions or `completedAt`, and sets `planConfirmedAt` if empty.
@@ -71,7 +78,7 @@ States of a day task: `idle → running ⇄ paused → done(running overtime | s
 
 ## 5. Checklist tasks
 
-- Tick sets `completedAt = now`; un-tick clears it (only while the day is open).
+- "Mark done" (on the task page) sets `completedAt = now`; "Mark not done" clears it (only while the day is open). Today has no tick boxes.
 - No timer, no overtime. Its collection item is **small**.
 
 ## 6. Closing a day
@@ -128,6 +135,9 @@ A gap is just a dashed link. There is no streak counter and no "broken" state.
 - **This week's dots** = the topic's completed items in the current Mon–Sun week (max 6 dots).
 
 ## 11. Deleting
+
+- **No topic (ADR-012)** is a normal topic for grouping (Plan, Today, calendar, close summary, stats) so a task never needs a topic. It appears only when it has rows (Library: only while it holds a live task, last in the list), is never counted as one of the user's topics (onboarding, "No topics yet", the Topics header count) and can't be edited or deleted. A task or one-off picks it by default; moving a task between topics (`updateTask` with `topicId`) puts it at the end of the target topic.
+- Moving a library task to another topic does not change existing day rows: they keep the topic they were planned with (they're snapshots).
 
 - Deleting a task or topic soft-deletes it from the library. **Past days keep their items**
   (they're snapshots). The confirm text says so.

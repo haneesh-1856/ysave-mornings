@@ -14,7 +14,7 @@ function setup() {
     db.insert(dayTasks)
       .values({
         id, dayKey: '2026-10-29', taskId: null, topicId: 't', name: id, colorKey: 'study', kind: 'timed',
-        budgetSec: 600, cue: null, treat: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null,
+        budgetSec: 600, cue: null, treat: null, note: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null,
         sortOrder: 0, createdAt: 1, updatedAt: 1,
       })
       .run();
@@ -43,7 +43,7 @@ describe('sessions repo', () => {
     const day = { dayKey: '2026-10-29', planConfirmedAt: 1, planDraftedAt: null, planUpdatedAt: null, closedAt: null, closedBy: null, dayStartHour: 4 } as const;
     const target = {
       id: 'B', dayKey: '2026-10-29', taskId: null, topicId: 't', name: 'B', colorKey: 'study', kind: 'timed',
-      budgetSec: 600, cue: null, treat: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null, sortOrder: 0,
+      budgetSec: 600, cue: null, treat: null, note: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null, sortOrder: 0,
     } as const;
     const decision = startDecision(target, day, getOpenSession(db));
     expect(decision).toEqual({ ok: true, closeSessionId: a.id });

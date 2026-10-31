@@ -1,4 +1,4 @@
-import type { ColorKey, Task, Topic } from '../../domain/types';
+import { NO_TOPIC_ID, type ColorKey, type Task, type Topic } from '../../domain/types';
 import * as tasksRepo from '../../data/repos/tasks';
 import * as topicsRepo from '../../data/repos/topics';
 import type { TaskInput } from '../../data/repos/tasks';
@@ -41,7 +41,7 @@ export function moveTopic(id: string, dir: -1 | 1): void {
   const db = getDb();
   const t = now();
   const moved = db.transaction((tx) => {
-    const list = topicsRepo.listTopics(tx as typeof db);
+    const list = topicsRepo.listUserTopics(tx as typeof db);
     const i = list.findIndex((x) => x.id === id);
     const j = i + dir;
     if (i < 0 || j < 0 || j >= list.length) return false;
@@ -54,13 +54,15 @@ export function moveTopic(id: string, dir: -1 | 1): void {
   if (moved) bump('topics');
 }
 
-export function createTask(topicId: string, input: { name: string } & Partial<TaskInput>): Task {
+/** A missing or null topicId puts the task in the built-in No topic (ADR-012). */
+export function createTask(topicId: string | null | undefined, input: { name: string } & Partial<Omit<TaskInput, 'topicId'>>): Task {
   const { name, ...rest } = input;
-  const task = tasksRepo.createTask(getDb(), { ...DEFAULT_TASK, ...rest, name, topicId }, now(), newId);
+  const task = tasksRepo.createTask(getDb(), { ...DEFAULT_TASK, ...rest, name, topicId: topicId ?? NO_TOPIC_ID }, now(), newId);
   bump('tasks');
   return task;
 }
 
+/** `patch.topicId` moves the task to the end of that topic (a live topic or NO_TOPIC_ID); anything else is refused. */
 export function updateTask(id: string, patch: Partial<TaskInput>): Task {
   const task = tasksRepo.updateTask(getDb(), id, patch, now());
   bump('tasks');

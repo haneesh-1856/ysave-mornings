@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import type { ClosedBy, CloseOutcome, ColorKey, TaskKind } from '../domain/types';
 
-const COLOR_KEYS = ['study', 'health', 'home', 'sun', 'c4', 'c5'] as const satisfies readonly ColorKey[];
+const COLOR_KEYS = ['study', 'health', 'home', 'sun', 'c4', 'c5', 'none'] as const satisfies readonly ColorKey[];
 const TASK_KINDS = ['timed', 'check'] as const satisfies readonly TaskKind[];
 const CLOSED_BY = ['user', 'auto'] as const satisfies readonly ClosedBy[];
 const CLOSE_OUTCOMES = ['moved', 'let_go'] as const satisfies readonly CloseOutcome[];
@@ -69,6 +69,7 @@ export const dayTasks = sqliteTable(
     budgetSec: integer('budgetSec').notNull(),
     cue: text('cue'),
     treat: text('treat'),
+    note: text('note'),
     forwardedFromDayKey: text('forwardedFromDayKey'),
     completedAt: integer('completedAt'),
     closeOutcome: text('closeOutcome', { enum: CLOSE_OUTCOMES }),

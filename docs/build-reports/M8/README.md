@@ -18,6 +18,10 @@ Interfaces: contract.md (written before the code chunks).
 | 7 | Color & glass split (tint = whole-app colour; glass = frost + blur only) | phone check | [chunk-07](chunk-07-color-glass.md) | PASS after 1 Opus fix (page text ≥ 4.5:1 over the blobs: per-blob calming) |
 | 8 | The colour colours the whole app (accent, background, cards, chain) + palettes in the colour list | 7 | [chunk-08](chunk-08-whole-app-color.md) | PASS after 1 Opus fix (selected tint keeps accent ≥ 4.5:1) |
 | 9 | Default changes after planning move the tick (both ways) | phone check | [chunk-09](chunk-09-default-after-plan.md) | PASS after 1 Opus fix (latest confirm wins: days.planUpdatedAt) |
+| 10 | Day notes: per-day note on every plan row, separate from the library note; travels when moved | phone check | [chunk-10](chunk-10-day-notes.md) | built, awaiting check |
+| 11 | Task page: every Today row opens a page with its notes and Start/Pause or Mark done; no tick boxes on Today | phone check | [chunk-11](chunk-11-task-page.md) | built, awaiting check |
+| 12 | A task needs no topic (built-in "No topic"); Plan one-off form: topic optional + day note | phone check | [chunk-12](chunk-12-optional-topic.md) | built, awaiting check |
+| 13 | Library "+ New task" (works with no topics) + a Topic picker on the library task card | 12 | [chunk-13](chunk-13-library-new-task.md) | built, awaiting check |
 
 ## Chunk 0 · App icon + splash
 **Choice (user, 2026-10-30):** "The Unfinished Sun", from the user's own reference image: a sun whose ring has one

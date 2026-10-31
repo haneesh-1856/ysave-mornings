@@ -1,7 +1,6 @@
 import { ValidationError } from '../../data/errors';
-import { discardDraft, getDay, loadDayBundle, saveConfirmedPlan, saveDraftPlan } from '../../data/repos/days';
+import { discardDraft, getDay, getDayTask, loadDayBundle, saveConfirmedPlan, saveDraftPlan, setDayTaskNote as storeDayTaskNote } from '../../data/repos/days';
 import { getDayStartHour } from '../../data/repos/settings';
-import * as tasksRepo from '../../data/repos/tasks';
 import { canConfirm, confirmPlan, isDraftable, plannableDays } from '../../domain/plan';
 import type { PlanDraft } from '../../domain/plan';
 import type { DayKey } from '../../domain/types';
@@ -67,8 +66,15 @@ export function discardDayDraft(dayKey: DayKey): void {
   bump('days');
 }
 
-/** Notes edit the library task (doc 04 section 2). */
-export function setTaskNoteFromPlan(taskId: string, note: string): void {
-  tasksRepo.setTaskNote(getDb(), taskId, note, now());
-  bump('tasks');
+/**
+ * Edits a stored day row's note (ADR-011): the per-day note, not the library one. Blank clears it.
+ * Throws ValidationError if the row is unknown, its day is closed, or the note is over the limit.
+ */
+export function setDayTaskNote(dayTaskId: string, note: string | null): void {
+  const db = getDb();
+  const row = getDayTask(db, dayTaskId);
+  if (!row) throw new ValidationError('dayTaskId', 'This task is not on a day list');
+  if (getDay(db, row.dayKey)?.closedAt != null) throw new ValidationError('dayTaskId', 'This day is closed');
+  storeDayTaskNote(db, dayTaskId, note, now());
+  bump('days');
 }

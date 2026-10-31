@@ -20,17 +20,17 @@ afterEach(teardownState);
 describe('usePlanTopics', () => {
   it('re-reads after createTopic and drops removed topics', async () => {
     const { result } = await renderHook(() => usePlanTopics());
-    expect(result.current).toEqual([]);
+    expect(result.current.map(x => x.name)).toEqual(['No topic']); // the built-in topic is always there (ADR-012)
     let id = '';
     await act(async () => {
       id = createTopic({ name: 'Study', colorKey: 'study' }).id;
       createTopic({ name: 'Body', colorKey: 'health' });
     });
-    expect(result.current.map(x => x.name)).toEqual(['Study', 'Body']);
+    expect(result.current.map(x => x.name)).toEqual(['Study', 'Body', 'No topic']);
     await act(async () => {
       removeTopic(id);
     });
-    expect(result.current.map(x => x.name)).toEqual(['Body']);
+    expect(result.current.map(x => x.name)).toEqual(['Body', 'No topic']);
   });
 });
 

@@ -58,7 +58,7 @@ function planTomorrow() {
         rows: [
           {
             key: 'k', taskId: null, topicId: topic.id, name: 'Sums', colorKey: 'health', kind: 'check', minutes: 5, cue: null,
-            treat: null, ticked: true, reason: 'one_off', forwardedFromDayKey: null, dayTaskId: null,
+            treat: null, note: null, ticked: true, reason: 'one_off', forwardedFromDayKey: null, dayTaskId: null,
           },
         ],
       },
@@ -79,7 +79,7 @@ function saveDraftFor(dayKey: string) {
         rows: [
           {
             key: 'k', taskId: null, topicId: topic.id, name: 'Sums', colorKey: 'health', kind: 'check', minutes: 5, cue: null,
-            treat: null, ticked: true, reason: 'one_off', forwardedFromDayKey: null, dayTaskId: null,
+            treat: null, note: null, ticked: true, reason: 'one_off', forwardedFromDayKey: null, dayTaskId: null,
           },
         ],
       },

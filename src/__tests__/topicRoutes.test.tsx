@@ -5,7 +5,7 @@ import NewTopic from '../app/topic/new';
 import { ValidationError } from '../data/errors';
 import * as topicsRepo from '../data/repos/topics';
 import { listTasks } from '../data/repos/tasks';
-import { getTopic, listTopics } from '../data/repos/topics';
+import { getTopic, listUserTopics } from '../data/repos/topics';
 import type { DB } from '../data/types';
 import { createTask, createTopic, removeTopic } from '../state/actions/library';
 import { setupState, teardownState } from '../state/testSupport';
@@ -45,7 +45,7 @@ describe('new topic route', () => {
     expect(screen.getByLabelText('Color 3').props.accessibilityState.selected).toBe(true);
     await fireEvent.changeText(screen.getByLabelText('Name'), 'Home');
     await fireEvent.press(screen.getByLabelText('Save'));
-    expect(listTopics(db).find((t) => t.name === 'Home')?.colorKey).toBe('home');
+    expect(listUserTopics(db).find((t) => t.name === 'Home')?.colorKey).toBe('home');
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
 
@@ -59,7 +59,7 @@ describe('new topic route', () => {
     await renderThemed(<NewTopic />);
     await fireEvent.press(screen.getByLabelText('Back to Topics'));
     expect(mockBack).toHaveBeenCalledTimes(1);
-    expect(listTopics(db)).toHaveLength(0);
+    expect(listUserTopics(db)).toHaveLength(0);
   });
 
   it('shows a ValidationError inline instead of throwing, and stays', async () => {
@@ -94,7 +94,7 @@ describe('new topic route', () => {
     });
     // and a press after the re-render hits a disabled button
     await fireEvent.press(screen.getByLabelText('Save'));
-    expect(listTopics(db)).toHaveLength(1);
+    expect(listUserTopics(db)).toHaveLength(1);
     expect(mockBack).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText('Save').props.accessibilityState?.disabled).toBe(true);
   });
@@ -110,7 +110,7 @@ describe('new topic route', () => {
     expect(screen.getByLabelText('Save').props.accessibilityState?.disabled).toBeFalsy();
     spy.mockRestore();
     await fireEvent.press(screen.getByLabelText('Save'));
-    expect(listTopics(db).map((t) => t.name)).toEqual(['Okay']);
+    expect(listUserTopics(db).map((t) => t.name)).toEqual(['Okay']);
     expect(mockBack).toHaveBeenCalledTimes(1);
   });
 });
@@ -180,7 +180,7 @@ describe('edit topic route', () => {
     await renderThemed(<EditTopic />);
     await fireEvent.press(screen.getByLabelText('Remove topic'));
     await fireEvent.press(screen.getByLabelText('Remove'));
-    expect(listTopics(db)).toHaveLength(0);
+    expect(listUserTopics(db)).toHaveLength(0);
     expect(listTasks(db)).toHaveLength(0);
     expect(mockBack).toHaveBeenCalledTimes(1);
   });

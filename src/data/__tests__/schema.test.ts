@@ -55,7 +55,7 @@ describe('schema', () => {
     );
     expect(cols('days')).toEqual([...stamps, 'dayKey', 'planConfirmedAt', 'planDraftedAt', 'planUpdatedAt', 'closedAt', 'closedBy', 'dayStartHour'].sort());
     expect(cols('day_tasks')).toEqual(
-      [...stamps, 'id', 'dayKey', 'taskId', 'topicId', 'name', 'colorKey', 'kind', 'budgetSec', 'cue', 'treat',
+      [...stamps, 'id', 'dayKey', 'taskId', 'topicId', 'name', 'colorKey', 'kind', 'budgetSec', 'cue', 'treat', 'note',
         'forwardedFromDayKey', 'completedAt', 'closeOutcome', 'sortOrder'].sort(),
     );
     expect(cols('sessions')).toEqual([...stamps, 'id', 'dayTaskId', 'startedAt', 'endedAt'].sort());

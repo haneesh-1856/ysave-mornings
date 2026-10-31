@@ -8,7 +8,7 @@ const at = (m: number, d: number, h: number, mi = 0): number => new Date(2026, m
 
 const dt = (id: string, dayKey: string, over: Partial<DayTask> = {}): DayTask => ({
   id, dayKey, taskId: null, topicId: 'A', name: id, colorKey: 'study', kind: 'check', budgetSec: 0,
-  cue: null, treat: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null, sortOrder: 0, ...over,
+  cue: null, treat: null, note: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null, sortOrder: 0, ...over,
 });
 const dayRow = (dayKey: string, over: Partial<Day> = {}): Day => ({
   dayKey, planConfirmedAt: 1, planDraftedAt: null, planUpdatedAt: null, closedAt: null, closedBy: null, dayStartHour: 4, ...over,
@@ -63,7 +63,7 @@ describe('closeByHand', () => {
     ]);
     expect(ops.insertDayTasks).toEqual([{
       dayKey: '2026-10-29', taskId: 't1', topicId: 'H', name: 'Stretch', colorKey: 'health', kind: 'check',
-      budgetSec: 0, cue: 'cue', treat: 'tr', forwardedFromDayKey: D, completedAt: null, closeOutcome: null,
+      budgetSec: 0, cue: 'cue', treat: 'tr', note: null, forwardedFromDayKey: D, completedAt: null, closeOutcome: null,
       sortOrder: 0,
     }]);
     expect(ops.closeSessions).toEqual([]);
@@ -324,5 +324,27 @@ describe('rollover: drafted today (ADR-010)', () => {
     const r = rollover(input({ tasks, today: { day, dayTasks: [dt('d', '2026-10-29', { taskId: 't2' })] } }));
     expect(r.createDays).toEqual([]);
     expect(r.insertDayTasks).toEqual([]);
+  });
+});
+
+describe('closeByHand: the day note travels (ADR-011)', () => {
+  const noted = (): DayBundle =>
+    bundle(dayRow(D), [dt('c1', D, { taskId: 't1', note: 'bring the form' }), dt('c2', D, { note: 'one-off note' })], []);
+
+  it('a new next-day row gets the note (library task and one-off)', () => {
+    const ops = closeByHand(noted(), { c1: 'moved', c2: 'moved' }, NEXT, at(10, 28, 22));
+    expect(ops.insertDayTasks.map((d) => d.note).sort()).toEqual(['bring the form', 'one-off note']);
+  });
+
+  it('an existing next-day row without a note receives it', () => {
+    const next = { day: dayRow('2026-10-29'), dayTasks: [dt('n1', '2026-10-29', { taskId: 't1' })], dayStartHour: 4 };
+    const ops = closeByHand(noted(), { c1: 'moved', c2: 'let_go' }, next, at(10, 28, 22));
+    expect(ops.forwardDayTasks).toEqual([{ dayTaskId: 'n1', forwardedFromDayKey: D, note: 'bring the form' }]);
+  });
+
+  it('an existing next-day row with its own note keeps it', () => {
+    const next = { day: dayRow('2026-10-29'), dayTasks: [dt('n1', '2026-10-29', { taskId: 't1', note: 'mine' })], dayStartHour: 4 };
+    const ops = closeByHand(noted(), { c1: 'moved', c2: 'let_go' }, next, at(10, 28, 22));
+    expect(ops.forwardDayTasks).toEqual([{ dayTaskId: 'n1', forwardedFromDayKey: D }]);
   });
 });

@@ -17,6 +17,8 @@ export interface PlanRow {
   minutes: number;
   cue: string | null;
   treat: string | null;
+  /** This day's note for the row (ADR-011); never the library note. */
+  note: string | null;
   ticked: boolean;
   reason: PlanReason;
   forwardedFromDayKey: DayKey | null;
@@ -65,6 +67,7 @@ function libraryRow(t: Task, topic: Topic, reason: PlanReason, ticked: boolean):
     minutes: t.minutes,
     cue: t.cue,
     treat: t.treat,
+    note: null,
     ticked,
     reason,
     forwardedFromDayKey: null,
@@ -140,6 +143,7 @@ export function buildPlan(input: PlanInput): PlanDraft {
         minutes,
         cue: d.cue,
         treat: d.treat,
+        note: d.note,
         // default turned off after the plan: shown unticked (Confirm then drops it, unless it has progress)
         ticked: forwarded || d.completedAt != null || lib?.isDefault !== false || !defaultChangedAfterPlan(lib),
         reason: forwarded ? 'forwarded' : 'saved',
@@ -165,7 +169,7 @@ export function buildPlan(input: PlanInput): PlanDraft {
     else if (confirmed && t.isDefault && defaultChangedAfterPlan(t)) row = libraryRow(t, topic, 'default', true);
     else row = libraryRow(t, topic, t.isDefault ? 'default' : 'repeats', false);
     if (att) {
-      row = { ...row, ticked: true, dayTaskId: att.id, minutes: dayMinutes(att, t), cue: att.cue, treat: att.treat };
+      row = { ...row, ticked: true, dayTaskId: att.id, minutes: dayMinutes(att, t), cue: att.cue, treat: att.treat, note: att.note };
     }
     entries.push({ row, notOn: !repeats, bucket: 0, order: t.sortOrder });
   }
@@ -226,17 +230,22 @@ export function setTreat(d: PlanDraft, key: string, treat: string | null): PlanD
   return mapRow(d, key, (r) => ({ ...r, treat }));
 }
 
+/** The day note of one row (ADR-011); blank (whitespace only) is null. Never touches the library task. */
+export function setNote(d: PlanDraft, key: string, note: string | null): PlanDraft {
+  return mapRow(d, key, (r) => ({ ...r, note: note == null || note.trim() === '' ? null : note }));
+}
+
 function allRows(d: PlanDraft): PlanRow[] {
   return [...d.groups.flatMap((g) => g.rows), ...d.notOn];
 }
 
 /**
  * Adds a ticked one-off ('one_off', taskId null) to its topic's group (created at the end if missing).
- * A blank (trimmed) name returns the draft unchanged. Minutes are clamped to MINUTES.
+ * A blank (trimmed) name returns the draft unchanged. Minutes are clamped to MINUTES. A blank or missing note is null.
  */
 export function addOneOff(
   d: PlanDraft,
-  row: { topicId: string; name: string; colorKey: ColorKey; kind: TaskKind; minutes: number },
+  row: { topicId: string; name: string; colorKey: ColorKey; kind: TaskKind; minutes: number; note?: string | null },
 ): PlanDraft {
   const name = row.name.trim();
   if (name === '') return d;
@@ -255,6 +264,7 @@ export function addOneOff(
     minutes: clampMinutes(row.minutes),
     cue: null,
     treat: null,
+    note: row.note == null || row.note.trim() === '' ? null : row.note,
     ticked: true,
     reason: 'one_off',
     forwardedFromDayKey: null,
@@ -274,7 +284,7 @@ export function canConfirm(d: PlanDraft): boolean {
 /**
  * Turns the draft into writes. `existing` = that day's current day_tasks.
  * - ticked row with dayTaskId (found in `existing`) -> update (budgetSec = minutes*60, or 0 for check;
- *   cue, treat, sortOrder replaced; everything else kept).
+ *   cue, treat, note, sortOrder replaced; everything else kept).
  * - ticked row otherwise -> insert draft (snapshot of name/colorKey/kind).
  * - existing row not ticked -> deleteIds, unless it has any session or completedAt: then it is kept
  *   untouched (no delete, no update).
@@ -311,7 +321,7 @@ export function confirmPlan(
     }
     if (ex) {
       updated.add(ex.id);
-      update.push({ ...ex, budgetSec, cue: r.cue, treat: r.treat, sortOrder });
+      update.push({ ...ex, budgetSec, cue: r.cue, treat: r.treat, note: r.note, sortOrder });
     } else {
       insert.push({
         dayKey: d.dayKey,
@@ -323,6 +333,7 @@ export function confirmPlan(
         budgetSec,
         cue: r.cue,
         treat: r.treat,
+        note: r.note,
         forwardedFromDayKey: r.forwardedFromDayKey,
         completedAt: null,
         closeOutcome: null,

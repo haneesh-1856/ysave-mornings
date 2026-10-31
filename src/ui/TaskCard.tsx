@@ -16,11 +16,14 @@ import { Switch } from './Switch';
 import { T } from './T';
 import { TextField } from './TextField';
 import { TimeSlider } from './TimeSlider';
+import { TopicPicker, type TopicOption } from './TopicPicker';
 import { useMotion } from './useMotion';
 import { WeekRing } from './WeekRing';
 
 export type TaskCardValue = {
   name: string;
+  /** A real topic id or NO_TOPIC_ID. */
+  topicId: string;
   kind: TaskKind;
   minutes: number;
   repeatMask: number;
@@ -34,6 +37,10 @@ export type TaskCardPatch = Partial<Omit<TaskCardValue, 'name' | 'note'>>;
 
 type Props = {
   value: TaskCardValue;
+  /** The topics the picker offers (No topic included). */
+  topics: TopicOption[];
+  /** Why the last topic change was refused. */
+  topicError?: string;
   flipped: boolean;
   /** Front tapped. */
   onFlip: () => void;
@@ -58,7 +65,7 @@ const KINDS = [
  * One task: a compact row (front) that flips (rotateX) into an editor (back). Presentational: the name and note
  * text is held here while typing and reported on every keystroke; the screen decides when to save.
  */
-export function TaskCard({ value, flipped, onFlip, onDone, onName, onNote, onChange, onDelete }: Props) {
+export function TaskCard({ value, topics, topicError, flipped, onFlip, onDone, onName, onNote, onChange, onDelete }: Props) {
   const t = useTheme();
   const { reduce } = useMotion();
   const [shown, setShown] = useState(flipped); // which face is drawn (swaps at the half-way point of a flip)
@@ -87,7 +94,7 @@ export function TaskCard({ value, flipped, onFlip, onDone, onName, onNote, onCha
   return (
     <Animated.View style={faceStyle}>
       {(reduce ? flipped : shown) ? (
-        <Back value={value} onDone={onDone} onName={onName} onNote={onNote} onChange={onChange} onDelete={onDelete} />
+        <Back value={value} topics={topics} topicError={topicError} onDone={onDone} onName={onName} onNote={onNote} onChange={onChange} onDelete={onDelete} />
       ) : (
         <Front value={value} onFlip={onFlip} />
       )}
@@ -119,7 +126,7 @@ function Front({ value, onFlip }: { value: TaskCardValue; onFlip: () => void }) 
   );
 }
 
-function Back({ value, onDone, onName, onNote, onChange, onDelete }: Omit<Props, 'flipped' | 'onFlip'>) {
+function Back({ value, topics, topicError, onDone, onName, onNote, onChange, onDelete }: Omit<Props, 'flipped' | 'onFlip'>) {
   const [name, setName] = useState(value.name);
   const [note, setNote] = useState(value.note);
   const [touched, setTouched] = useState(false);
@@ -142,6 +149,7 @@ function Back({ value, onDone, onName, onNote, onChange, onDelete }: Omit<Props,
           onName(s);
         }}
       />
+      <TopicPicker topics={topics} value={value.topicId} onChange={topicId => onChange({ topicId })} error={topicError} />
       <View style={{ gap: 6 }}>
         <T variant="label">Repeats</T>
         <WeekRing mask={value.repeatMask} onChange={repeatMask => onChange({ repeatMask })} />

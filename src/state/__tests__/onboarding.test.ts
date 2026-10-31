@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react-native';
 import { getDayStartHour, getSetting } from '../../data/repos/settings';
 import { listTasks } from '../../data/repos/tasks';
-import { listTopics } from '../../data/repos/topics';
+import { listUserTopics } from '../../data/repos/topics';
 import type { DB } from '../../data/types';
 import { dayStartOf } from '../../domain/dayKey';
 import { createTopic } from '../actions/library';
@@ -32,7 +32,7 @@ const valid = (over: Partial<OnboardingInput> = {}): OnboardingInput => ({
 });
 
 function expectUnchanged() {
-  expect(listTopics(db)).toHaveLength(0);
+  expect(listUserTopics(db)).toHaveLength(0);
   expect(listTasks(db)).toHaveLength(0);
   expect(getSetting(db, ONBOARDED_SETTING)).toBeUndefined();
   expect(getDayStartHour(db)).toBe(4);
@@ -46,7 +46,7 @@ describe('needsOnboarding', () => {
     skipOnboarding();
     expect(needsOnboarding()).toBe(false);
     expect(getSetting(db, ONBOARDED_SETTING)).toBe(NOW);
-    expect(listTopics(db)).toHaveLength(0);
+    expect(listUserTopics(db)).toHaveLength(0);
   });
 
   it('is false for an existing install with a topic but no onboardedAt', () => {
@@ -56,7 +56,7 @@ describe('needsOnboarding', () => {
 
   it('is false when only a days row exists', () => {
     reconcile(); // creates today's row with no topics
-    expect(listTopics(db)).toHaveLength(0);
+    expect(listUserTopics(db)).toHaveLength(0);
     expect(getSetting(db, ONBOARDED_SETTING)).toBeUndefined();
     expect(needsOnboarding()).toBe(false);
   });
@@ -66,7 +66,7 @@ describe('finishOnboarding', () => {
   it('creates one timed topic + task, sets hour and onboardedAt, returns today', () => {
     const { todayKey } = finishOnboarding(valid());
     expect(todayKey).toBe('2026-10-30');
-    const topics = listTopics(db);
+    const topics = listUserTopics(db);
     expect(topics).toHaveLength(1);
     expect(topics[0]).toMatchObject({ name: 'Study', colorKey: 'study' });
     const tasks = listTasks(db);

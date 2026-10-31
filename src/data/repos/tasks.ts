@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull, max } from 'drizzle-orm';
 import { MINUTES, type Epoch, type Task, type TaskKind } from '../../domain/types';
 import { NotFoundError, ValidationError } from '../errors';
-import { tasks } from '../schema';
+import { tasks, topics } from '../schema';
 import type { DB } from '../types';
 import { toTask } from './mappers';
 
@@ -19,6 +19,13 @@ export interface TaskInput {
   isDefault: boolean;
   cue: string | null;
   treat: string | null;
+}
+
+/** The topic must exist and not be deleted (No topic always qualifies). */
+function requireLiveTopic(db: DB, topicId: string): string {
+  const row = db.select({ id: topics.id }).from(topics).where(and(eq(topics.id, topicId), isNull(topics.deletedAt))).get();
+  if (!row) throw new ValidationError('topicId', `Topic ${topicId} does not exist`);
+  return topicId;
 }
 
 function validName(name: string): string {
@@ -68,7 +75,7 @@ export function getTask(db: DB, id: string): Task | null {
 
 export function createTask(db: DB, input: TaskInput, now: Epoch, newId: () => string): Task {
   const v = {
-    topicId: input.topicId,
+    topicId: requireLiveTopic(db, input.topicId),
     name: validName(input.name),
     kind: validKind(input.kind),
     minutes: validMinutes(input.minutes),
@@ -101,7 +108,15 @@ export function updateTask(
   now: Epoch,
 ): Task {
   const set: Partial<typeof tasks.$inferInsert> = { updatedAt: now };
-  if (patch.topicId !== undefined) set.topicId = patch.topicId;
+  if (patch.topicId !== undefined) {
+    const before = db.select({ t: tasks.topicId }).from(tasks).where(eq(tasks.id, id)).get();
+    if (before && before.t !== patch.topicId) {
+      set.topicId = requireLiveTopic(db, patch.topicId);
+      // joins the end of the target topic (an explicit sortOrder in the same patch overrides this below)
+      const top = db.select({ m: max(tasks.sortOrder) }).from(tasks).where(eq(tasks.topicId, patch.topicId)).get();
+      set.sortOrder = (top?.m ?? -1) + 1;
+    }
+  }
   if (patch.name !== undefined) set.name = validName(patch.name);
   if (patch.kind !== undefined) set.kind = validKind(patch.kind);
   if (patch.minutes !== undefined) set.minutes = validMinutes(patch.minutes);

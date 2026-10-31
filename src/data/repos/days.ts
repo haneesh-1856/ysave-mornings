@@ -1,10 +1,11 @@
 import { and, asc, eq, gt, gte, inArray, isNull, lt, lte } from 'drizzle-orm';
 import type { confirmPlan } from '../../domain/plan';
-import type { Day, DayBundle, DayKey, Epoch, Session } from '../../domain/types';
+import type { Day, DayBundle, DayKey, DayTask, Epoch, Session } from '../../domain/types';
 import { NotFoundError, ValidationError } from '../errors';
 import { days, dayTasks, sessions } from '../schema';
 import type { DB } from '../types';
 import { toDay, toDayTask, toSession, type Executor } from './mappers';
+import { NOTE_MAX } from './tasks';
 
 export function getDay(db: DB, dayKey: DayKey): Day | null {
   const row = db.select().from(days).where(eq(days.dayKey, dayKey)).get();
@@ -79,6 +80,13 @@ type PlanWrite = {
   newId: () => string;
 };
 
+/** A day note: at most NOTE_MAX characters; blank (whitespace only) is stored as null (ADR-011). */
+function validDayNote(note: string | null): string | null {
+  if (note == null || note.trim() === '') return null;
+  if (note.length > NOTE_MAX) throw new ValidationError('note', `note must be at most ${NOTE_MAX} characters`);
+  return note;
+}
+
 /** The shared writes of a confirmPlan() result, inside a transaction. Order matters (unique (dayKey, taskId)): deletes, inserts, updates. */
 function applyPlanResult(tx: Executor, input: PlanWrite): void {
   const { dayKey, dayStartHour, result, now, newId } = input;
@@ -107,7 +115,7 @@ function applyPlanResult(tx: Executor, input: PlanWrite): void {
   }
   for (const draft of result.insert) {
     tx.insert(dayTasks)
-      .values({ ...draft, dayKey, id: newId(), createdAt: now, updatedAt: now })
+      .values({ ...draft, note: validDayNote(draft.note), dayKey, id: newId(), createdAt: now, updatedAt: now })
       .run();
   }
   for (const row of result.update) {
@@ -121,6 +129,7 @@ function applyPlanResult(tx: Executor, input: PlanWrite): void {
         budgetSec: row.budgetSec,
         cue: row.cue,
         treat: row.treat,
+        note: validDayNote(row.note),
         forwardedFromDayKey: row.forwardedFromDayKey,
         sortOrder: row.sortOrder,
         updatedAt: now,
@@ -186,6 +195,19 @@ export function discardDraft(db: DB, dayKey: DayKey, now: Epoch): void {
     tx.delete(dayTasks).where(eq(dayTasks.dayKey, dayKey)).run();
     tx.delete(days).where(eq(days.dayKey, dayKey)).run();
   });
+}
+
+/** One day row by id, or null. */
+export function getDayTask(db: DB, id: string): DayTask | null {
+  const row = db.select().from(dayTasks).where(eq(dayTasks.id, id)).get();
+  return row ? toDayTask(row) : null;
+}
+
+/** Sets one day row's note (ADR-011). Blank clears it. Throws ValidationError if over NOTE_MAX, NotFoundError if unknown. */
+export function setDayTaskNote(db: DB, id: string, note: string | null, now: Epoch): void {
+  const n = validDayNote(note);
+  if (!getDayTask(db, id)) throw new NotFoundError(`Day task ${id} not found`);
+  db.update(dayTasks).set({ note: n, updatedAt: now }).where(eq(dayTasks.id, id)).run();
 }
 
 /** Ticks (epoch) or unticks (null) a check task. */

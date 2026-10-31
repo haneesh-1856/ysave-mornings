@@ -57,6 +57,7 @@ export const toDayTask = (r: DayTaskRow): DayTask => ({
   budgetSec: r.budgetSec,
   cue: r.cue ?? null,
   treat: r.treat ?? null,
+  note: r.note ?? null,
   forwardedFromDayKey: r.forwardedFromDayKey ?? null,
   completedAt: r.completedAt ?? null,
   closeOutcome: r.closeOutcome ?? null,

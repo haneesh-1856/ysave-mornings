@@ -6,7 +6,7 @@ const day = (o: Partial<Day> = {}): Day => ({
 });
 const dt = (id: string, o: Partial<DayTask> = {}): DayTask => ({
   id, dayKey: '2026-10-28', taskId: null, topicId: 't1', name: id, colorKey: 'study', kind: 'timed',
-  budgetSec: 600, cue: null, treat: null, forwardedFromDayKey: null, completedAt: null,
+  budgetSec: 600, cue: null, treat: null, note: null, forwardedFromDayKey: null, completedAt: null,
   closeOutcome: null, sortOrder: 0, ...o,
 });
 const bundle = (d: Day, dayTasks: DayTask[], s: Record<string, Session[]> = {}): DayBundle => ({

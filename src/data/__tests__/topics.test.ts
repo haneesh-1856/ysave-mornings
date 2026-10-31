@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { ValidationError } from '../errors';
-import { createTopic, getTopic, listTopics, softDeleteTopic, updateTopic } from '../repos/topics';
+import { createTopic, getTopic, listUserTopics, softDeleteTopic, updateTopic } from '../repos/topics';
 import { createTask, getTask, listTasks } from '../repos/tasks';
 import { createTestDb } from './testDb';
 
@@ -20,8 +20,8 @@ describe('topics repo', () => {
     expect(b.sortOrder).toBe(1);
     expect(getTopic(db, 'id-1')).toEqual(a);
     expect(getTopic(db, 'nope')).toBeNull();
-    expect(listTopics(db).map((t) => t.name)).toEqual(['Study', 'Health']);
-    expect(typeof listTopics(db)[0].isOpen).toBe('boolean');
+    expect(listUserTopics(db).map((t) => t.name)).toEqual(['Study', 'Health']);
+    expect(typeof listUserTopics(db)[0].isOpen).toBe('boolean');
   });
 
   it('validates name length and colorKey', () => {
@@ -31,7 +31,7 @@ describe('topics repo', () => {
     expect(createTopic(db, { name: 'x'.repeat(24), colorKey: 'study' }, 1, newId).name).toHaveLength(24);
     // @ts-expect-error invalid color on purpose
     expect(() => createTopic(db, { name: 'ok', colorKey: 'pink' }, 1, newId)).toThrow(ValidationError);
-    expect(listTopics(db)).toHaveLength(1);
+    expect(listUserTopics(db)).toHaveLength(1);
   });
 
   it('updates fields, keeps updatedAt, rejects bad input and unknown ids', () => {
@@ -54,7 +54,7 @@ describe('topics repo', () => {
     const k3 = createTask(db, { ...base, topicId: t2.id, name: 'three' }, 1, newId);
 
     softDeleteTopic(db, t1.id, 500);
-    expect(listTopics(db).map((t) => t.id)).toEqual([t2.id]);
+    expect(listUserTopics(db).map((t) => t.id)).toEqual([t2.id]);
     expect(getTopic(db, t1.id)?.deletedAt).toBe(500);
     expect(listTasks(db).map((t) => t.id)).toEqual([k3.id]);
     expect(getTask(db, k1.id)?.deletedAt).toBe(500);

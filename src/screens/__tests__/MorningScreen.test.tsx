@@ -47,7 +47,7 @@ function draft(dayKey: string, topicId: string): PlanDraft {
         rows: [
           {
             key: 'k', taskId: null, topicId, name: 'Read', colorKey: 'study', kind: 'timed', minutes: 30, cue: null,
-            treat: null, ticked: true, reason: 'one_off', forwardedFromDayKey: null, dayTaskId: null,
+            treat: null, note: null, ticked: true, reason: 'one_off', forwardedFromDayKey: null, dayTaskId: null,
           },
         ],
       },

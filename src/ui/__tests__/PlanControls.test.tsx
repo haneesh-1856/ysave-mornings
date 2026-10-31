@@ -12,7 +12,7 @@ import { renderThemed } from '../testing';
 
 const row = (over: Partial<PlanRowData> = {}): PlanRowData => ({
   key: 'k1', taskId: 't1', topicId: 'tp1', name: 'DSA practice', colorKey: 'study', kind: 'timed', minutes: 45,
-  cue: null, treat: null, ticked: true, reason: 'default', forwardedFromDayKey: null, dayTaskId: null, ...over,
+  cue: null, treat: null, note: null, ticked: true, reason: 'default', forwardedFromDayKey: null, dayTaskId: null, ...over,
 });
 
 describe('Checkbox', () => {
@@ -116,57 +116,79 @@ describe('PlanRow', () => {
     expect(p.onCue).toHaveBeenCalledWith('After class');
     await fireEvent.press(screen.getByLabelText('Tea'));
     expect(p.onTreat).toHaveBeenCalledWith('Tea');
-    await fireEvent.changeText(screen.getByLabelText('Note'), 'hello');
+    await fireEvent.changeText(screen.getByLabelText('Note for Friday'), 'hello');
     expect(p.onNote).toHaveBeenCalledWith('hello');
   });
 
   it('expanded checklist row has no stepper', async () => {
     await renderThemed(<PlanRow row={row({ kind: 'check' })} {...props()} expanded />);
     expect(screen.queryByRole('adjustable')).toBeNull();
-    expect(screen.getByLabelText('Note')).toBeTruthy();
+    expect(screen.getByLabelText('Note for Friday')).toBeTruthy();
   });
 
-  it('hides the note when noteEditable is false, keeping the other controls', async () => {
-    await renderThemed(<PlanRow row={row({ reason: 'one_off', taskId: null })} {...props()} expanded noteEditable={false} />);
-    expect(screen.queryByLabelText('Note')).toBeNull();
+  it('a one-off row has the day note field too, and the library note shows read-only above it', async () => {
+    const p = props();
+    await renderThemed(<PlanRow row={row({ reason: 'one_off', taskId: null })} {...p} expanded />);
+    expect(screen.getByLabelText('Note for Friday')).toBeTruthy();
+    expect(screen.queryByText(/^Library note:/)).toBeNull();
     expect(screen.getByLabelText('After class')).toBeTruthy();
+  });
+
+  it('shows a non-empty library note read-only', async () => {
+    await renderThemed(<PlanRow row={row()} {...props()} expanded libraryNote="bring the book" />);
+    expect(screen.getByText('Library note: bring the book')).toBeTruthy();
+    expect(screen.getByLabelText('Note for Friday')).toBeTruthy();
   });
 });
 
 describe('OneOffForm', () => {
-  const topics = [{ id: 'a', name: 'Study', colorKey: 'study' as const }, { id: 'b', name: 'Health', colorKey: 'health' as const }];
+  const topics = [
+    { id: 'a', name: 'Study', colorKey: 'study' as const },
+    { id: 'b', name: 'Health', colorKey: 'health' as const },
+    { id: 'no-topic', name: 'No topic', colorKey: 'none' as const },
+  ];
 
-  it('disables Add until a name and topic are set, then returns the row (default 30 min)', async () => {
+  it('disables Add until a name is set, then returns the row (No topic, 30 min, no note)', async () => {
     const onAdd = jest.fn();
-    await renderThemed(<OneOffForm topics={topics} onAdd={onAdd} onCancel={jest.fn()} />);
-    const add = screen.getByLabelText('Add');
-    expect(add.props.accessibilityState?.disabled).toBe(true);
-    await fireEvent.changeText(screen.getByLabelText('Task name'), '  Read paper ');
+    await renderThemed(<OneOffForm dayName="Friday" topics={topics} onAdd={onAdd} onCancel={jest.fn()} />);
     expect(screen.getByLabelText('Add').props.accessibilityState?.disabled).toBe(true);
-    await fireEvent.press(screen.getByLabelText('Health'));
+    await fireEvent.changeText(screen.getByLabelText('Task name'), '  Read paper ');
     expect(screen.getByLabelText('Add').props.accessibilityState?.disabled).toBeFalsy();
     await fireEvent.press(screen.getByLabelText('Add'));
-    expect(onAdd).toHaveBeenCalledWith({ topicId: 'b', name: 'Read paper', kind: 'timed', minutes: 30 });
+    expect(onAdd).toHaveBeenCalledWith({ topicId: 'no-topic', name: 'Read paper', kind: 'timed', minutes: 30, note: null });
+  });
+
+  it('lists No topic first and selected; a chosen topic and a note are returned', async () => {
+    const onAdd = jest.fn();
+    await renderThemed(<OneOffForm dayName="Friday" topics={topics} onAdd={onAdd} onCancel={jest.fn()} />);
+    const radios = screen.getAllByRole('radio').slice(0, 3).map(r => r.props.accessibilityLabel);
+    expect(radios).toEqual(['No topic', 'Study', 'Health']);
+    expect(screen.getByLabelText('No topic').props.accessibilityState.checked).toBe(true);
+    await fireEvent.changeText(screen.getByLabelText('Task name'), 'Read paper');
+    await fireEvent.press(screen.getByLabelText('Health'));
+    await fireEvent.changeText(screen.getByLabelText('Note for Friday'), 'section 2');
+    await fireEvent.press(screen.getByLabelText('Add'));
+    expect(onAdd).toHaveBeenCalledWith({ topicId: 'b', name: 'Read paper', kind: 'timed', minutes: 30, note: 'section 2' });
   });
 
   it('whitespace-only names stay invalid; length chips change minutes; checklist is kind check', async () => {
     const onAdd = jest.fn();
-    await renderThemed(<OneOffForm topics={topics} onAdd={onAdd} onCancel={jest.fn()} />);
+    await renderThemed(<OneOffForm dayName="Friday" topics={topics} onAdd={onAdd} onCancel={jest.fn()} />);
     await fireEvent.press(screen.getByLabelText('Study'));
     await fireEvent.changeText(screen.getByLabelText('Task name'), '   ');
     expect(screen.getByLabelText('Add').props.accessibilityState?.disabled).toBe(true);
     await fireEvent.changeText(screen.getByLabelText('Task name'), 'Sketch');
     await fireEvent.press(screen.getByLabelText('90'));
     await fireEvent.press(screen.getByLabelText('Add'));
-    expect(onAdd).toHaveBeenLastCalledWith({ topicId: 'a', name: 'Sketch', kind: 'timed', minutes: 90 });
+    expect(onAdd).toHaveBeenLastCalledWith({ topicId: 'a', name: 'Sketch', kind: 'timed', minutes: 90, note: null });
     await fireEvent.press(screen.getByLabelText('Checklist'));
     await fireEvent.press(screen.getByLabelText('Add'));
-    expect(onAdd).toHaveBeenLastCalledWith({ topicId: 'a', name: 'Sketch', kind: 'check', minutes: 15 });
+    expect(onAdd).toHaveBeenLastCalledWith({ topicId: 'a', name: 'Sketch', kind: 'check', minutes: 15, note: null });
   });
 
   it('caps the name at 40 characters and cancels', async () => {
     const onCancel = jest.fn();
-    await renderThemed(<OneOffForm topics={topics} onAdd={jest.fn()} onCancel={onCancel} />);
+    await renderThemed(<OneOffForm dayName="Friday" topics={topics} onAdd={jest.fn()} onCancel={onCancel} />);
     await fireEvent.changeText(screen.getByLabelText('Task name'), 'x'.repeat(60));
     expect(screen.getByLabelText('Task name').props.value).toHaveLength(40);
     await fireEvent.press(screen.getByLabelText('Cancel'));

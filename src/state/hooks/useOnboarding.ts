@@ -1,19 +1,19 @@
 import { useMemo } from 'react';
 import { listDays } from '../../data/repos/days';
 import { getSetting } from '../../data/repos/settings';
-import { listTopics } from '../../data/repos/topics';
+import { listUserTopics } from '../../data/repos/topics';
 import { ONBOARDED_SETTING } from '../actions/onboarding';
 import { getDb } from '../dbRef';
 import { useDataVersion } from '../store';
 
 /**
- * True when the welcome flow should show: no `onboardedAt` AND no topics AND no days rows.
+ * True when the welcome flow should show: no `onboardedAt` AND no user topics (the built-in No topic does not count) AND no days rows.
  * Existing installs (any topic or day) count as onboarded, so nobody already using the app sees it.
  */
 export function needsOnboarding(): boolean {
   const db = getDb();
   if (getSetting(db, ONBOARDED_SETTING) != null) return false;
-  if (listTopics(db).length > 0) return false;
+  if (listUserTopics(db).length > 0) return false;
   return listDays(db, '0000-01-01', '9999-12-31').length === 0;
 }
 

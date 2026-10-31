@@ -1,4 +1,3 @@
-import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { View } from 'react-native';
@@ -6,9 +5,7 @@ import { View } from 'react-native';
 import { addDays } from '@/domain/dayKey';
 import { isGold, overtimeMs, remainingMs } from '@/domain/timer';
 import type { DayTask, Epoch } from '@/domain/types';
-import { toggleCheckTask } from '@/state/actions/run';
 import { now } from '@/state/clock';
-import { ValidationError } from '@/state/errors';
 import { useChain } from '@/state/hooks/useChain';
 import { useDayPlan } from '@/state/hooks/useDayPlan';
 import { useNow } from '@/state/hooks/useNow';
@@ -77,10 +74,10 @@ function timedLabel(name: string, minutes: number, state: Timed, left: number, o
   }
 }
 
-type TimedProps = { row: TodayRow; at: Epoch; onOpen: (dayTaskId: string) => void; disabled?: boolean };
+type TimedProps = { row: TodayRow; at: Epoch; onOpen: (dayTaskId: string) => void };
 
 /** A timed row evaluated at a fixed instant. Only RunningRow feeds it a ticking instant. */
-function TimedRowAt({ row, at, onOpen, disabled }: TimedProps) {
+function TimedRowAt({ row, at, onOpen }: TimedProps) {
   const { dayTask, sessions, state } = row;
   if (state === 'check-open' || state === 'check-done') return null;
   const minutes = Math.round(dayTask.budgetSec / 60);
@@ -97,29 +94,26 @@ function TimedRowAt({ row, at, onOpen, disabled }: TimedProps) {
       overtimeMs={over}
       gold={gold}
       onPress={() => onOpen(dayTask.id)}
-      disabled={disabled}
       a11yLabel={timedLabel(dayTask.name, minutes, state, left, over, gold)}
     />
   );
 }
 
 /** The running row owns the 1 Hz clock and the hit-zero watcher, so nothing else re-renders each second. */
-function RunningRow({ row, onOpen, disabled }: { row: TodayRow; onOpen: (dayTaskId: string) => void; disabled: boolean }) {
+function RunningRow({ row, onOpen }: { row: TodayRow; onOpen: (dayTaskId: string) => void }) {
   const at = useNow();
   useCompletionWatcher(row);
-  return <TimedRowAt row={row} at={at} onOpen={onOpen} disabled={disabled} />;
+  return <TimedRowAt row={row} at={at} onOpen={onOpen} />;
 }
 
-const noop = () => {};
-
-const TimedRow = memo(function TimedRow({ row, onOpen, locked }: { row: TodayRow; onOpen: (id: string) => void; locked: boolean }) {
-  // A closed day's rows announce as disabled and do nothing when pressed.
+// Every row opens its task page, closed day included (the page is read-only then).
+const TimedRow = memo(function TimedRow({ row, onOpen }: { row: TodayRow; onOpen: (id: string) => void }) {
   return row.state === 'running'
-    ? <RunningRow row={row} onOpen={onOpen} disabled={locked} />
-    : <TimedRowAt row={row} at={now()} onOpen={onOpen} disabled={locked} />;
+    ? <RunningRow row={row} onOpen={onOpen} />
+    : <TimedRowAt row={row} at={now()} onOpen={onOpen} />;
 });
 
-const CheckTaskRow = memo(function CheckTaskRow({ row, onToggle, locked }: { row: TodayRow; onToggle: (id: string) => void; locked: boolean }) {
+const CheckTaskRow = memo(function CheckTaskRow({ row, onOpen }: { row: TodayRow; onOpen: (id: string) => void }) {
   const from = row.dayTask.forwardedFromDayKey;
   const moved = row.dayTask.closeOutcome === 'moved';
   return (
@@ -129,8 +123,7 @@ const CheckTaskRow = memo(function CheckTaskRow({ row, onToggle, locked }: { row
       done={row.state === 'check-done'}
       forwardedFrom={from ? weekdayName(from) : undefined}
       movedTo={moved ? weekdayName(addDays(row.dayTask.dayKey, 1)) : undefined}
-      onToggle={() => onToggle(row.dayTask.id)}
-      disabled={locked}
+      onPress={() => onOpen(row.dayTask.id)}
     />
   );
 });
@@ -153,15 +146,6 @@ export default function TodayScreen() {
     (dayTaskId: string) => router.push({ pathname: '/run/[dayTaskId]', params: { dayTaskId } }),
     [],
   );
-  const toggle = useCallback((dayTaskId: string) => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    try {
-      toggleCheckTask(dayTaskId);
-    } catch (e) {
-      if (!(e instanceof ValidationError)) throw e; // e.g. the day closed meanwhile: nothing to do
-    }
-  }, []);
-
   const groups = useMemo(() => {
     const out: { topicId: string; name: string; rows: TodayRow[] }[] = [];
     for (const r of rows) {
@@ -239,9 +223,9 @@ export default function TodayScreen() {
             onToggle={() => setShut((s) => ({ ...s, [g.topicId]: !s[g.topicId] }))}>
             {g.rows.map((r) =>
               r.dayTask.kind === 'timed' ? (
-                <TimedRow key={r.dayTask.id} row={r} onOpen={closed ? noop : openRun} locked={closed} />
+                <TimedRow key={r.dayTask.id} row={r} onOpen={openRun} />
               ) : (
-                <CheckTaskRow key={r.dayTask.id} row={r} onToggle={closed ? noop : toggle} locked={closed} />
+                <CheckTaskRow key={r.dayTask.id} row={r} onOpen={openRun} />
               ),
             )}
           </Fold>

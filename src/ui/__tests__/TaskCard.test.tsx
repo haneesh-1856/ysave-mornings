@@ -9,11 +9,12 @@ jest.mock('../useMotion', () => ({
 }));
 
 const base: TaskCardValue = {
-  name: 'Read', kind: 'timed', minutes: 45, repeatMask: 0b0010101, isDefault: true, cue: null, treat: null, note: '',
+  name: 'Read', topicId: 'study', kind: 'timed', minutes: 45, repeatMask: 0b0010101, isDefault: true, cue: null, treat: null, note: '',
 };
 
 function setup(over: Partial<TaskCardValue> = {}, flipped = false) {
-  const cb = { onFlip: jest.fn(), onDone: jest.fn(), onName: jest.fn(), onNote: jest.fn(), onChange: jest.fn(), onDelete: jest.fn() };
+  const topics = [{ id: 'no-topic', name: 'No topic', colorKey: 'none' as const }, { id: 'study', name: 'Study', colorKey: 'study' as const }];
+  const cb = { topics, onFlip: jest.fn(), onDone: jest.fn(), onName: jest.fn(), onNote: jest.fn(), onChange: jest.fn(), onDelete: jest.fn() };
   const ui = (f: boolean, v: TaskCardValue) => <TaskCard value={v} flipped={f} {...cb} />;
   return { cb, ui, ...{ value: { ...base, ...over }, flipped } };
 }
@@ -75,6 +76,16 @@ describe('TaskCard', () => {
     expect(cb.onChange).toHaveBeenLastCalledWith({ treat: 'Tea' });
     await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
     expect(cb.onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('back: the Topic radiogroup shows the value, reports a choice, and shows the refusal text', async () => {
+    const { cb, value } = setup({ topicId: 'study' }, true);
+    await renderThemed(<TaskCard value={value} flipped {...cb} topicError="That topic no longer exists. Pick another." />);
+    expect(screen.getByRole('radio', { name: 'Study' }).props.accessibilityState.checked).toBe(true);
+    expect(screen.getByRole('radio', { name: 'No topic' }).props.accessibilityState.checked).toBe(false);
+    await fireEvent.press(screen.getByRole('radio', { name: 'No topic' }));
+    expect(cb.onChange).toHaveBeenLastCalledWith({ topicId: 'no-topic' });
+    expect(screen.getByText('That topic no longer exists. Pick another.')).toBeTruthy();
   });
 
   it('shows "A task needs a name" when the name is blanked, not for an untouched blank draft', async () => {

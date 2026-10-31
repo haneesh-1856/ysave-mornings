@@ -26,10 +26,11 @@ type Props = {
   onStep: (delta: 5 | -5) => void;
   onCue: (v: string | null) => void;
   onTreat: (v: string | null) => void;
+  /** This day's note for the row (ADR-011), edited in the Note field. */
   note: string;
   onNote: (text: string) => void;
-  /** Default true. False hides the Note field (a one-off row has no library task to keep the note). */
-  noteEditable?: boolean;
+  /** The library task's general note, shown read-only above the field; empty or missing shows nothing. */
+  libraryNote?: string;
 };
 
 const NOTE_MAX = 1000;
@@ -52,7 +53,7 @@ function subtitle(row: PlanRowData, dayKey: DayKey, locale?: string): string {
   }
 }
 
-export function PlanRow({ row, topicName, dayKey, locale, expanded, onToggleTick, onToggleExpand, onStep, onCue, onTreat, note, onNote, noteEditable = true }: Props) {
+export function PlanRow({ row, topicName, dayKey, locale, expanded, onToggleTick, onToggleExpand, onStep, onCue, onTreat, note, onNote, libraryNote }: Props) {
   const t = useTheme();
   const timed = row.kind === 'timed';
   const dayName = weekdayName(dayKey, locale);
@@ -77,9 +78,8 @@ export function PlanRow({ row, topicName, dayKey, locale, expanded, onToggleTick
           {timed ? <Stepper value={row.minutes} onChange={v => onStep(v > row.minutes ? 5 : -5)} label={`${row.name} minutes`} /> : null}
           <ChipSet label="When" options={CUES} value={row.cue} onChange={onCue} />
           <ChipSet label="Treat" options={TREATS} value={row.treat} onChange={onTreat} />
-          {noteEditable ? (
-            <TextField label="Note" value={note} onChangeText={onNote} maxLength={NOTE_MAX} multiline placeholder="A note for this task" />
-          ) : null}
+          {libraryNote ? <T variant="sub">{`Library note: ${libraryNote}`}</T> : null}
+          <TextField label={`Note for ${dayName}`} value={note} onChangeText={onNote} maxLength={NOTE_MAX} multiline placeholder={`What to do on ${dayName}`} />
         </View>
       ) : null}
     </View>

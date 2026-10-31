@@ -1,11 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Keyboard, Platform, Pressable, View } from 'react-native';
 
 import { isDayKey } from '@/domain/dayKey';
 import type { PlanDraft, PlanRow as PlanRowData } from '@/domain/plan';
 import type { DayKey } from '@/domain/types';
-import { setTaskNoteFromPlan } from '@/state/actions/plan';
 import { ValidationError } from '@/state/errors';
 import { usePlanDraft } from '@/state/hooks/usePlanDraft';
 import { usePlannableDays } from '@/state/hooks/usePlannableDays';
@@ -23,7 +22,6 @@ import { PlanRow } from '@/ui/PlanRow';
 import { Screen } from '@/ui/Screen';
 import { T } from '@/ui/T';
 
-const DEBOUNCE_MS = 400;
 const REMOVED_TOPIC = 'Removed topic';
 const EMPTY_DRAFT = 'Tick at least one task, or discard the draft.';
 const NOT_PLANNABLE =
@@ -91,22 +89,9 @@ function PlanBody({ dayKey }: { dayKey: DayKey }) {
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState<string>();
   const [discarding, setDiscarding] = useState(false);
-  const [notes, setNotes] = useState<Record<string, string>>({});
   // One hook call for the single expanded row (hooks are never called per row or conditionally).
   const expandedTaskId = plan.draft ? findRow(plan.draft, expanded)?.taskId ?? null : null;
   const libraryNote = useTaskNote(expandedTaskId);
-
-  // Debounced note saving: edits go to the library task (rows with a taskId only); flushed on collapse and unmount.
-  const pending = useRef<Record<string, { taskId: string; text: string }>>({});
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flush = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = null;
-    const p = pending.current;
-    pending.current = {};
-    for (const { taskId, text } of Object.values(p)) setTaskNoteFromPlan(taskId, text);
-  }, []);
-  useEffect(() => flush, [flush]);
 
   if (!plan.plannable || !plan.draft) return <NotPlannable />;
   const draft = plan.draft;
@@ -114,19 +99,7 @@ function PlanBody({ dayKey }: { dayKey: DayKey }) {
   const name = weekdayName(dayKey);
   const title = dayKey === todayKey ? 'Plan today' : `Plan ${name}`;
 
-  const toggleExpand = (key: string) => {
-    flush(); // collapsing (or switching rows) saves what is pending
-    setExpanded(cur => (cur === key ? null : key));
-  };
-  // Only rows with a library task show the note (noteEditable), and only the expanded row's note is read.
-  const noteOf = (row: PlanRowData): string => notes[row.key] ?? libraryNote;
-  const onNote = (row: PlanRowData, text: string) => {
-    if (!row.taskId) return; // not reachable: the field is hidden for one-offs
-    setNotes(n => ({ ...n, [row.key]: text }));
-    pending.current[row.key] = { taskId: row.taskId, text };
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(flush, DEBOUNCE_MS);
-  };
+  const toggleExpand = (key: string) => setExpanded(cur => (cur === key ? null : key));
 
   const renderRow = (row: PlanRowData) => (
     <PlanRow
@@ -140,9 +113,9 @@ function PlanBody({ dayKey }: { dayKey: DayKey }) {
       onStep={d => plan.step(row.key, d)}
       onCue={v => plan.setCue(row.key, v)}
       onTreat={v => plan.setTreat(row.key, v)}
-      note={expanded === row.key && row.taskId != null ? noteOf(row) : ''}
-      noteEditable={row.taskId != null}
-      onNote={text => onNote(row, text)}
+      note={row.note ?? ''}
+      onNote={text => plan.setNote(row.key, text)}
+      libraryNote={expanded === row.key ? libraryNote : undefined}
     />
   );
 
@@ -150,7 +123,6 @@ function PlanBody({ dayKey }: { dayKey: DayKey }) {
   const saveDraft = () => {
     try {
       guard.run(() => {
-        flush();
         plan.saveDraft();
         goBack();
       });
@@ -162,7 +134,6 @@ function PlanBody({ dayKey }: { dayKey: DayKey }) {
   const discardDraft = () => {
     try {
       guard.run(() => {
-        flush(); // notes belong to the library task, not the draft
         plan.discardDraft();
         goBack();
       });
@@ -178,7 +149,6 @@ function PlanBody({ dayKey }: { dayKey: DayKey }) {
   const confirm = () => {
     try {
       guard.run(() => {
-        flush();
         plan.confirm();
         router.replace({ pathname: '/planned/[dayKey]', params: { dayKey } });
       });
@@ -248,6 +218,7 @@ function PlanBody({ dayKey }: { dayKey: DayKey }) {
       ) : null}
       {adding ? (
         <OneOffForm
+          dayName={name}
           topics={topics.map(x => ({ id: x.id, name: x.name, colorKey: x.colorKey }))}
           onAdd={row => {
             plan.addOneOff(row);

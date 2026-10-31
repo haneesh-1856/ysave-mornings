@@ -31,7 +31,7 @@ export function applyOps(db: DB, ops: Ops, newId: () => string, now: Epoch): voi
     }
     for (const f of ops.forwardDayTasks) {
       tx.update(dayTasks)
-        .set({ forwardedFromDayKey: f.forwardedFromDayKey, updatedAt: now })
+        .set({ forwardedFromDayKey: f.forwardedFromDayKey, ...(f.note !== undefined ? { note: f.note } : {}), updatedAt: now })
         .where(eq(dayTasks.id, f.dayTaskId))
         .run();
     }
