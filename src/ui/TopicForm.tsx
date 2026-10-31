@@ -7,10 +7,11 @@ import { useTheme } from '@/theme/ThemeProvider';
 import { Button } from './Button';
 import { unitNoun } from './collectionNoun';
 import { ColorSwatches } from './ColorSwatches';
-import { ConfirmBox } from './ConfirmBox';
 import { Fold } from './Fold';
 import { T } from './T';
 import { TextField } from './TextField';
+import type { TopicOption } from './TopicPicker';
+import { TopicRemove } from './TopicRemove';
 
 export const TOPIC_NAME_MAX = 24;
 
@@ -19,7 +20,11 @@ type Props = {
   initialColor: ColorKey;
   onSave: (name: string, colorKey: ColorKey) => void;
   /** Passing this shows the Remove section (edit mode). */
-  onRemove?: () => void;
+  onRemove?: (moves?: { taskId: string; toTopicId: string }[]) => void;
+  /** Edit mode: the topic's tasks and where they could move, for the Remove question (ADR-013). */
+  removal?: { tasks: { id: string; name: string }[]; targets: TopicOption[] };
+  /** Why Remove was refused (e.g. a chosen topic was removed meanwhile). */
+  removeError?: string;
   /** A problem reported by the save (e.g. a ValidationError message), shown under the name. */
   error?: string;
   /** A save/remove is in flight: disables Save and Remove so a second press can't double-submit. */
@@ -29,7 +34,7 @@ type Props = {
 const noop = () => {};
 
 /** Name + color + live preview for a topic. Presentational: the route decides what saving means. */
-export function TopicForm({ initialName, initialColor, onSave, onRemove, error, busy = false }: Props) {
+export function TopicForm({ initialName, initialColor, onSave, onRemove, removal, removeError, error, busy = false }: Props) {
   const [name, setName] = useState(initialName);
   const [color, setColor] = useState<ColorKey>(initialColor);
   const [asking, setAsking] = useState(false);
@@ -59,12 +64,14 @@ export function TopicForm({ initialName, initialColor, onSave, onRemove, error, 
       <Button label="Save" disabled={blank || busy} onPress={() => onSave(name, color)} />
       {onRemove ? (
         asking ? (
-          <ConfirmBox
-            danger
-            text={`Remove ${initialName}? Removes its tasks from your library. Past days keep their ${units}.`}
-            confirmLabel="Remove"
-            disabled={busy}
-            onConfirm={onRemove}
+          <TopicRemove
+            name={initialName}
+            tasks={removal?.tasks ?? []}
+            targets={removal?.targets ?? []}
+            units={units}
+            busy={busy}
+            error={removeError}
+            onRemove={onRemove}
             onCancel={() => setAsking(false)}
           />
         ) : (

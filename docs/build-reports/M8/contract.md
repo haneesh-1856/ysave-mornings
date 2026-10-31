@@ -177,6 +177,8 @@ Rule (ADR-012):
 - Plan one-off form: Task name, Topic (No topic first, default), Length, "Note for <weekday>" (optional, max 1000;
   blank = null, stored as the row's day note). Add needs only a name.
 - Chunk 13: see below.
+- Chunk 14: see below.
+- Chunk 15: see below.
 
 ## Chunk 13 · Library: new task + topic picker (phone check, user 2026-10-31)
 User: "...in the library there should also be not just add new topic, also add new task."
@@ -190,3 +192,22 @@ Rule:
   editor, used by `createTask` once named; "+ Add task" inside a topic starts with that topic.
 - `TaskEditor` props: `topics`, `onCreated(id, topicId)`, `onMoved?(topicId)`. A `ValidationError` (topic deleted
   meanwhile) shows "That topic no longer exists. Pick another." under the picker.
+
+## Chunk 14 · Delete topic: move tasks first (phone check, user 2026-10-31)
+User: "When given a scenario where the topic is being deleted, give them a choice if they want to move any tasks in it before deleting, then go ahead with the decision yes or no."
+Rule (ADR-013):
+- Topic with no live tasks: Remove shows the plain confirm (unchanged).
+- Topic with N live tasks: "<Topic> has N tasks. Move any of them before deleting?" with "Yes, move tasks", "No, delete all" (danger), "Cancel".
+- Yes: the tasks with a checkbox each (all ticked), a "Move to" `TopicPicker` (No topic first, other live topics, not this one; default No topic), the line "X move to <Topic> · Y is deleted", "Move and delete topic" (danger) and "Back".
+- `removeTopic(id, { moveTaskIds, toTopicId? })` (state) -> `softDeleteTopic(db, id, now, { taskIds, toTopicId })` (repo). One transaction: moved tasks join the end of the target in their old order, then the topic and the remaining tasks get `deletedAt`. `ValidationError` (nothing written) for: no target, target missing/deleted/the topic itself, an id that is not a live task of the topic, No topic. The screen shows it as text and stays.
+- Day rows are not touched. `useTopicRemoval(id)` gives the screen the tasks and the targets. `TopicPicker` gets an optional `label`.
+
+## Chunk 15 · Delete topic: choose a topic per task (phone check, user 2026-10-31)
+User: "Good, it's asking to move all tasks of the topic to just one topic when deleting that topic. For each task give an option to pick which topic to move it to."
+Rule (amends chunk 14, ADR-013):
+- The first step is unchanged ("<Topic> has N tasks. Move any of them before deleting?" Yes / No, delete all / Cancel), and so is the empty-topic confirm.
+- Yes: one row per task, a button "<Task> -> <Destination>" (accessibilityLabel "<Task>, moves to <Destination>. Change", or "<Task>, is deleted. Change"). Default No topic. Tapping opens, under that row only, a `TopicPicker` (label "Move <Task> to"): No topic first, other live topics (never this one), then "Delete". Picking sets it and collapses the row; one row open at a time.
+- Summary "X move · Y is deleted" (X=1 reads "1 moves", Y=1 reads "is"; "0 move" when all are deleted). Buttons "Move and delete topic" (danger) and "Back".
+- Only tasks still in the current list are submitted; a task added meanwhile shows with No topic.
+- `removeTopic(id, { moves: [{ taskId, toTopicId }] })` -> `softDeleteTopic(db, id, now, { moves })`; replaces `moveTaskIds`/`toTopicId`. Tasks not listed are deleted with the topic. One transaction; validated before any write: each target live and not the topic, each taskId a live task of the topic, no duplicate taskId (`ValidationError`, nothing written). Each moved task goes to the end of its target, tasks to the same target keep their old relative order.
+- `TopicPicker` gets an optional `extra: { id, name }` shown last without a color dot (used for "Delete").

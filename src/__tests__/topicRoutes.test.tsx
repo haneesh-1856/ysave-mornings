@@ -179,7 +179,7 @@ describe('edit topic route', () => {
     mockParams = { id: t.id };
     await renderThemed(<EditTopic />);
     await fireEvent.press(screen.getByLabelText('Remove topic'));
-    await fireEvent.press(screen.getByLabelText('Remove'));
+    await fireEvent.press(screen.getByLabelText('No, delete all'));
     expect(listUserTopics(db)).toHaveLength(0);
     expect(listTasks(db)).toHaveLength(0);
     expect(mockBack).toHaveBeenCalledTimes(1);

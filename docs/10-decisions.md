@@ -84,3 +84,16 @@ topics yet", the Topics header). In the Library it is listed only while it holds
 between topics (`updateTask` with `topicId`, to the end of the target).
 **Trade-off:** one special row that a few screens must know about (filter it from "your topics", hide its edit button);
 in return no nullable `topicId`, no migration of old rows, and nothing that groups by topic needs a second code path.
+
+### ADR-013 · Deleting a topic can first move its tasks (product decision, 2026-10-31)
+**Context:** in the phone check the user wanted a choice, when deleting a topic, to move any of its tasks before it goes,
+instead of losing them all with it.
+**Decision:** a topic with live tasks asks "Move any of them before deleting?". Yes lists its tasks, each with its own
+destination (amended 2026-10-31, chunk 15: first built as one shared "Move to" picker plus per-task checkboxes). A task
+defaults to No topic; tapping it opens a picker with No topic first, the other live topics (never the topic itself) and a
+last option "Delete" (removed with the topic). Moved tasks go to the end of their target in their old relative order. No
+deletes everything as before; Cancel changes nothing. `removeTopic(id, { moves: [{ taskId, toTopicId }] })` ->
+`softDeleteTopic(..., { moves })` do the moves and the cascade in one transaction and validate first (every target live
+and not the topic, every taskId a live task of the topic, no duplicates); tasks not listed are deleted. Day rows stay snapshots.
+**Trade-off:** one more step on a destructive action and a longer confirm; in return nothing is lost by accident and no
+second screen or undo is needed. A topic with no tasks keeps the plain confirm.

@@ -142,3 +142,9 @@ A gap is just a dashed link. There is no streak counter and no "broken" state.
 - Deleting a task or topic soft-deletes it from the library. **Past days keep their items**
   (they're snapshots). The confirm text says so.
 - If a deleted task is in today's or tomorrow's open plan, its row stays for that day.
+- **Deleting a topic that has live tasks asks first** (ADR-013): "Move any of them before deleting?" Yes lists the tasks,
+  each with its own destination: No topic (default), another live topic (never this one), or Delete (removed with the
+  topic). Moved tasks go to the end of their target in their old relative order, so tasks sent to the same topic keep
+  their order. No deletes the topic and all its tasks, as before. One transaction: a missing target, a duplicate or a
+  task that isn't the topic's refuses it and changes nothing. Day rows stay as they were (snapshots). A topic with no
+  tasks keeps the plain confirm.

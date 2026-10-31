@@ -22,6 +22,8 @@ Interfaces: contract.md (written before the code chunks).
 | 11 | Task page: every Today row opens a page with its notes and Start/Pause or Mark done; no tick boxes on Today | phone check | [chunk-11](chunk-11-task-page.md) | built, awaiting check |
 | 12 | A task needs no topic (built-in "No topic"); Plan one-off form: topic optional + day note | phone check | [chunk-12](chunk-12-optional-topic.md) | built, awaiting check |
 | 13 | Library "+ New task" (works with no topics) + a Topic picker on the library task card | 12 | [chunk-13](chunk-13-library-new-task.md) | built, awaiting check |
+| 14 | Deleting a topic asks whether to move its tasks first (ADR-013) | phone check | [chunk-14](chunk-14-delete-topic-move.md) | built, awaiting check |
+| 15 | Deleting a topic: pick a destination (or Delete) for each task | phone check | [chunk-15](chunk-15-per-task-move.md) | built, awaiting check |
 
 ## Chunk 0 · App icon + splash
 **Choice (user, 2026-10-30):** "The Unfinished Sun", from the user's own reference image: a sun whose ring has one

@@ -30,9 +30,12 @@ export function updateTopic(id: string, patch: { name?: string; colorKey?: Color
   return topic;
 }
 
-/** Soft delete; the repo cascades to the topic's tasks. */
-export function removeTopic(id: string): void {
-  topicsRepo.softDeleteTopic(getDb(), id, now());
+/**
+ * Soft delete; the repo cascades to the topic's tasks. `moves` first sends each listed task to its own target
+ * (another live topic or No topic) in the same transaction (ADR-013); tasks not listed are deleted with the topic.
+ */
+export function removeTopic(id: string, opts?: { moves: { taskId: string; toTopicId: string }[] }): void {
+  topicsRepo.softDeleteTopic(getDb(), id, now(), opts);
   bump('topics', 'tasks');
 }
 

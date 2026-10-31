@@ -87,10 +87,35 @@ export function updateTopic(
   return topic;
 }
 
-/** Soft delete (doc 04 §11): the topic and all its tasks get deletedAt = now, in one transaction. */
-export function softDeleteTopic(db: DB, id: string, now: Epoch): void {
+/**
+ * Soft delete (doc 04 §11): the topic and all its tasks get deletedAt = now, in one transaction.
+ * With `moves`, each listed task first joins the end of its own target topic (tasks sent to the same target keep their
+ * old order) and so is not deleted; a bad target or task id throws before anything is written. Day rows are snapshots
+ * and are not touched.
+ */
+export function softDeleteTopic(db: DB, id: string, now: Epoch, opts?: { moves: { taskId: string; toTopicId: string }[] }): void {
   refuseNoTopic(id, 'deleted');
   db.transaction((tx) => {
+    if (opts) {
+      const own = tx.select().from(tasks).where(and(eq(tasks.topicId, id), isNull(tasks.deletedAt))).orderBy(asc(tasks.sortOrder)).all();
+      const target = new Map<string, string>();
+      for (const m of opts.moves) {
+        if (target.has(m.taskId)) throw new ValidationError('moves', 'A task can only move once');
+        if (!own.some(t => t.id === m.taskId)) throw new ValidationError('moves', 'Only tasks of this topic can be moved');
+        const live = tx.select({ id: topics.id }).from(topics).where(and(eq(topics.id, m.toTopicId), isNull(topics.deletedAt))).get();
+        if (m.toTopicId === id || !live) throw new ValidationError('toTopicId', `Topic ${m.toTopicId} does not exist`);
+        target.set(m.taskId, m.toTopicId);
+      }
+      const next = new Map<string, number>();
+      for (const t of own) { // old order, so tasks sent to one target keep their relative order
+        const to = target.get(t.id);
+        if (to === undefined) continue;
+        if (!next.has(to)) next.set(to, (tx.select({ m: max(tasks.sortOrder) }).from(tasks).where(eq(tasks.topicId, to)).get()?.m ?? -1) + 1);
+        const order = next.get(to)!;
+        next.set(to, order + 1);
+        tx.update(tasks).set({ topicId: to, sortOrder: order, updatedAt: now }).where(eq(tasks.id, t.id)).run();
+      }
+    }
     tx.update(topics).set({ deletedAt: now, updatedAt: now }).where(and(eq(topics.id, id), isNull(topics.deletedAt))).run();
     tx.update(tasks).set({ deletedAt: now, updatedAt: now }).where(and(eq(tasks.topicId, id), isNull(tasks.deletedAt))).run();
   });
