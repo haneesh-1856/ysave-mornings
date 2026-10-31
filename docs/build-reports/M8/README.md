@@ -17,6 +17,7 @@ Interfaces: contract.md (written before the code chunks).
 | 6 | Release plumbing (eas.json, CI, Maestro golden path, docs) | 5 | [chunk-06](chunk-06-release.md) | PASS (no fix needed; actions kept on v4 knowingly) |
 | 7 | Color & glass split (tint = whole-app colour; glass = frost + blur only) | phone check | [chunk-07](chunk-07-color-glass.md) | PASS after 1 Opus fix (page text ≥ 4.5:1 over the blobs: per-blob calming) |
 | 8 | The colour colours the whole app (accent, background, cards, chain) + palettes in the colour list | 7 | [chunk-08](chunk-08-whole-app-color.md) | PASS after 1 Opus fix (selected tint keeps accent ≥ 4.5:1) |
+| 9 | Default changes after planning move the tick (both ways) | phone check | [chunk-09](chunk-09-default-after-plan.md) | PASS after 1 Opus fix (latest confirm wins: days.planUpdatedAt) |
 
 ## Chunk 0 · App icon + splash
 **Choice (user, 2026-10-30):** "The Unfinished Sun", from the user's own reference image: a sun whose ring has one
@@ -72,3 +73,18 @@ Still open: Sunrise accent decision (burnt orange vs coral for shapes); Expo acc
   "A task needs a name" only appeared after typing and clearing). Now `TaskCard` Done with a blank name stays open and
   shows the message; "Delete task" backs out of a draft. Tests: TaskCard (new), TopicsScreen (2 updated to the new rule).
 - **Decision (user):** keep Sunrise's accent as burnt orange `#af5a3f`.
+- **Color & glass (chunks 7–8), passed 2026-10-31** on the phone: palettes and colours colour the whole app.
+- **Bug found 2026-10-31 (M5 check 2 path):** a checklist task closed with "Move to Saturday" did not show in the next
+  day's plan. Under investigation as bug-01 (likely: next day already held the task in a draft/plan, so the move was
+  skipped silently).
+- **bug-01 fixed 2026-10-31** ([report](bug-01-moved-task.md)): the user's path was Saturday planned AND confirmed on
+  Friday, then Friday closed with "Move to Saturday". When the next day's plan or draft already held the same task,
+  `closeByHand` skipped the move silently. It now marks that row as forwarded ("from Friday"); otherwise it inserts it,
+  as before. Checker PASS (re-traced the user's exact path for both cases). 76 suites / 917 tests. Carried: a stale
+  Plan screen left open with unsaved edits across the close could drop the forwarded row on confirm (narrow; cheap
+  hardening: keep forwarded rows in confirmPlan).
+- **bug-02 fixed 2026-10-31** ([report](bug-02-moved-one-off.md)): user's exact path = one-off checklist A added in
+  today's plan, tomorrow confirmed, today closed with "Move to tomorrow", then looked at the **Today tab**. A was saved
+  for tomorrow (Plan, Planned, Calendar showed it) but the closed Today tab only said "Tomorrow is planned · N tasks".
+  Now it lists tomorrow's tasks ("from <weekday>" for moved ones) and today's moved rows read "moved to <weekday>".
+  Screen-level test of the exact path fails without the fix (checker reverted it to confirm). 77 suites / 924 tests.

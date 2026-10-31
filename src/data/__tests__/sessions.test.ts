@@ -9,7 +9,7 @@ function setup() {
   const { db, sqlite } = createTestDb();
   let n = 0;
   const newId = () => `s-${++n}`;
-  db.insert(days).values({ dayKey: '2026-10-29', planConfirmedAt: 1, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4, createdAt: 1, updatedAt: 1 }).run();
+  db.insert(days).values({ dayKey: '2026-10-29', planConfirmedAt: 1, planDraftedAt: null, planUpdatedAt: null, closedAt: null, closedBy: null, dayStartHour: 4, createdAt: 1, updatedAt: 1 }).run();
   for (const id of ['A', 'B']) {
     db.insert(dayTasks)
       .values({
@@ -40,7 +40,7 @@ describe('sessions repo', () => {
   it('starting B while A runs closes A first and succeeds (via StartDecision)', () => {
     const { db, newId } = setup();
     const a = startSession(db, { dayTaskId: 'A', closeSessionId: null, now: 1000, newId });
-    const day = { dayKey: '2026-10-29', planConfirmedAt: 1, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4 } as const;
+    const day = { dayKey: '2026-10-29', planConfirmedAt: 1, planDraftedAt: null, planUpdatedAt: null, closedAt: null, closedBy: null, dayStartHour: 4 } as const;
     const target = {
       id: 'B', dayKey: '2026-10-29', taskId: null, topicId: 't', name: 'B', colorKey: 'study', kind: 'timed',
       budgetSec: 600, cue: null, treat: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null, sortOrder: 0,

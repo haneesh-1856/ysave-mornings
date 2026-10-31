@@ -96,4 +96,21 @@ describe('tasks repo', () => {
     expect(() => setTaskNote(db, t.id, 'x'.repeat(1001), 6)).toThrow(ValidationError);
     expect(() => setTaskNote(db, 'missing', 'n', 6)).toThrow('not found');
   });
+
+  it('defaultChangedAt: set on create as default, null otherwise, moved only by a real isDefault change', () => {
+    const { db, newId, input } = setup();
+    const def = createTask(db, input, 100, newId);
+    const plain = createTask(db, { ...input, isDefault: false }, 100, newId);
+    expect(def.defaultChangedAt).toBe(100);
+    expect(plain.defaultChangedAt).toBeNull();
+    expect(updateTask(db, def.id, { isDefault: true, name: 'Other' }, 200).defaultChangedAt).toBe(100); // unchanged value
+    expect(updateTask(db, def.id, { minutes: 45, cue: 'x' }, 250).defaultChangedAt).toBe(100); // other fields
+    expect(updateTask(db, def.id, { isDefault: false }, 300).defaultChangedAt).toBe(300);
+    expect(updateTask(db, plain.id, { isDefault: true }, 400).defaultChangedAt).toBe(400);
+    expect(getTask(db, plain.id)!.defaultChangedAt).toBe(400);
+  });
+  it('updateTask with isDefault on a missing id still throws NotFound', () => {
+    const { db } = setup();
+    expect(() => updateTask(db, 'nope', { isDefault: true }, 1)).toThrow();
+  });
 });

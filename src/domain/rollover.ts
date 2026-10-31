@@ -112,7 +112,7 @@ export function closeByHand(
   }
   if (next.day === null) {
     ops.createDays = [
-      { dayKey: nextKey, planConfirmedAt: null, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: next.dayStartHour },
+      { dayKey: nextKey, planConfirmedAt: null, planDraftedAt: null, planUpdatedAt: null, closedAt: null, closedBy: null, dayStartHour: next.dayStartHour },
     ];
   }
   return ops;
@@ -159,7 +159,7 @@ export function rollover(input: {
   ) {
     if (today.day === null) {
       ops.createDays.push({
-        dayKey: todayKey, planConfirmedAt: null, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour,
+        dayKey: todayKey, planConfirmedAt: null, planDraftedAt: null, planUpdatedAt: null, closedAt: null, closedBy: null, dayStartHour,
       });
     }
     ops.insertDayTasks = prefillUnplanned({

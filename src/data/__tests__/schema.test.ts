@@ -51,9 +51,9 @@ describe('schema', () => {
     const stamps = ['createdAt', 'updatedAt'];
     expect(cols('topics')).toEqual([...stamps, 'colorKey', 'deletedAt', 'id', 'isOpen', 'name', 'sortOrder'].sort());
     expect(cols('tasks')).toEqual(
-      [...stamps, 'id', 'topicId', 'name', 'kind', 'minutes', 'repeatMask', 'isDefault', 'cue', 'treat', 'note', 'sortOrder', 'deletedAt'].sort(),
+      [...stamps, 'id', 'topicId', 'name', 'kind', 'minutes', 'repeatMask', 'isDefault', 'cue', 'treat', 'note', 'sortOrder', 'deletedAt', 'defaultChangedAt'].sort(),
     );
-    expect(cols('days')).toEqual([...stamps, 'dayKey', 'planConfirmedAt', 'planDraftedAt', 'closedAt', 'closedBy', 'dayStartHour'].sort());
+    expect(cols('days')).toEqual([...stamps, 'dayKey', 'planConfirmedAt', 'planDraftedAt', 'planUpdatedAt', 'closedAt', 'closedBy', 'dayStartHour'].sort());
     expect(cols('day_tasks')).toEqual(
       [...stamps, 'id', 'dayKey', 'taskId', 'topicId', 'name', 'colorKey', 'kind', 'budgetSec', 'cue', 'treat',
         'forwardedFromDayKey', 'completedAt', 'closeOutcome', 'sortOrder'].sort(),

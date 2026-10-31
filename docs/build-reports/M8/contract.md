@@ -117,3 +117,19 @@ When a tint other than "Match the palette" is chosen, `buildTheme` derives the a
   COLOR list, first, so all colour choices live in one place. Picking a palette = `pal` + match tint (exactly that
   palette). Picking a tint = current `pal` as the light/dark base + everything follows the tint. The visible "Match the
   palette" tint is replaced by the palette entries (key kept for saved data). Look's Palette aspect stays (same key).
+
+## Chunk 9 · Default changes after planning (phone check, user 2026-10-31)
+User's exact path: today closed; tomorrow planned + confirmed; then in Topics created task B (new topic, all 7 days,
+default on); reopened tomorrow's plan → B listed UNTICKED. User expects ticked. Also the reverse.
+Rule (user chose the recommended option):
+- In an already confirmed (or drafted) future plan, a library task whose **default was turned on (or that was created as
+  default) AFTER that day's plan was confirmed/drafted**, and that repeats on that day, shows **ticked** when the plan is
+  reopened; it joins the plan on Confirm (nothing is written until Confirm).
+- A task in that plan whose **default was turned off AFTER** confirmation shows **unticked** when reopened, and is left
+  out on Confirm unless the user ticks it (started/finished rows are never dropped, ADR-009).
+- Choices made at/before confirmation win: a default task the user unticked when confirming stays unticked; a
+  non-default task the user ticked stays ticked. Only changes after confirmation move the tick.
+- Needs a per-task timestamp of the last default change (e.g. `tasks.default_changed_at`, set on create and whenever
+  `isDefault` changes), compared with the day's `planConfirmedAt` / `planDraftedAt`. Drizzle migration; existing rows
+  get NULL (= no change after any plan). Repo + domain (buildPlan) + tests.
+- Today tab's tomorrow list keeps showing stored rows only (B appears there after Confirm).

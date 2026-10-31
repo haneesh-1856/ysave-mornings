@@ -49,7 +49,7 @@ describe('days repo', () => {
 
     saveConfirmedPlan(db, { dayKey: DAY, dayStartHour: 6, result: planFor(db, DAY), now: 1000, newId });
     const b = loadDayBundle(db, DAY)!;
-    expect(b.day).toEqual({ dayKey: DAY, planConfirmedAt: 1000, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 6 });
+    expect(b.day).toEqual({ dayKey: DAY, planConfirmedAt: 1000, planDraftedAt: null, planUpdatedAt: 1000, closedAt: null, closedBy: null, dayStartHour: 6 });
     expect(b.dayTasks.map((t) => t.taskId)).toEqual([dsa.id, read.id]);
     expect(b.dayTasks.map((t) => t.sortOrder)).toEqual([0, 1]);
     expect(b.dayTasks[0]).toMatchObject({ budgetSec: 3600, name: 'DSA', kind: 'timed', closeOutcome: null, completedAt: null });
@@ -204,7 +204,7 @@ describe('draft plans (ADR-010)', () => {
     const { db, newId, dsa, read } = setup();
     saveDraftPlan(db, { dayKey: LATER, dayStartHour: 6, result: planFor(db, LATER), now: 1000, newId });
     const b = loadDayBundle(db, LATER)!;
-    expect(b.day).toEqual({ dayKey: LATER, planConfirmedAt: null, planDraftedAt: 1000, closedAt: null, closedBy: null, dayStartHour: 6 });
+    expect(b.day).toEqual({ dayKey: LATER, planConfirmedAt: null, planDraftedAt: 1000, planUpdatedAt: 1000, closedAt: null, closedBy: null, dayStartHour: 6 });
     expect(b.dayTasks.map((t) => t.taskId)).toEqual([dsa.id, read.id]);
 
     // second save: untick DSA, keep Read

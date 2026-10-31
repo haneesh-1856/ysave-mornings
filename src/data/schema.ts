@@ -38,6 +38,8 @@ export const tasks = sqliteTable('tasks', {
   note: text('note').notNull(),
   sortOrder: integer('sortOrder').notNull(),
   deletedAt: integer('deletedAt'),
+  /** Epoch ms of the last change of isDefault (set on create when default); NULL = never changed after any plan. */
+  defaultChangedAt: integer('defaultChangedAt'),
   ...timestamps,
 });
 
@@ -45,6 +47,7 @@ export const days = sqliteTable('days', {
   dayKey: text('dayKey').primaryKey(),
   planConfirmedAt: integer('planConfirmedAt'),
   planDraftedAt: integer('planDraftedAt'),
+  planUpdatedAt: integer('planUpdatedAt'),
   closedAt: integer('closedAt'),
   closedBy: text('closedBy', { enum: CLOSED_BY }),
   dayStartHour: integer('dayStartHour').notNull(),

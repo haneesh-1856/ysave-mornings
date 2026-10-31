@@ -85,6 +85,7 @@ export function createTask(db: DB, input: TaskInput, now: Epoch, newId: () => st
       note: '',
       sortOrder: (top?.m ?? -1) + 1,
       deletedAt: null,
+      defaultChangedAt: v.isDefault ? now : null,
       createdAt: now,
       updatedAt: now,
     };
@@ -105,7 +106,12 @@ export function updateTask(
   if (patch.kind !== undefined) set.kind = validKind(patch.kind);
   if (patch.minutes !== undefined) set.minutes = validMinutes(patch.minutes);
   if (patch.repeatMask !== undefined) set.repeatMask = validMask(patch.repeatMask);
-  if (patch.isDefault !== undefined) set.isDefault = patch.isDefault;
+  if (patch.isDefault !== undefined) {
+    set.isDefault = patch.isDefault;
+    // only a real change moves the stamp, so saving the editor with the switch untouched never re-ticks a task
+    const before = db.select({ d: tasks.isDefault }).from(tasks).where(eq(tasks.id, id)).get();
+    if (before && before.d !== patch.isDefault) set.defaultChangedAt = now;
+  }
   if (patch.cue !== undefined) set.cue = validOptText('cue', patch.cue, CUE_MAX);
   if (patch.treat !== undefined) set.treat = validOptText('treat', patch.treat, TREAT_MAX);
   if (patch.sortOrder !== undefined) {

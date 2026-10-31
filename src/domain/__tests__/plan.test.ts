@@ -13,7 +13,7 @@ const topic = (id: string, sortOrder: number, extra: Partial<Topic> = {}): Topic
 });
 const task = (id: string, topicId: string, sortOrder: number, extra: Partial<Task> = {}): Task => ({
   id, topicId, name: id, kind: 'timed', minutes: 30, repeatMask: THU_BIT, isDefault: true,
-  cue: null, treat: null, note: '', sortOrder, deletedAt: null, ...extra,
+  cue: null, treat: null, note: '', sortOrder, deletedAt: null, defaultChangedAt: null, ...extra,
 });
 const dayTask = (id: string, extra: Partial<DayTask> = {}): DayTask => ({
   id, dayKey: THU, taskId: null, topicId: 'A', name: id, colorKey: 'study', kind: 'timed',
@@ -21,7 +21,7 @@ const dayTask = (id: string, extra: Partial<DayTask> = {}): DayTask => ({
   closeOutcome: null, sortOrder: 0, ...extra,
 });
 const day = (planConfirmedAt: number | null): Day => ({
-  dayKey: THU, planConfirmedAt, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4,
+  dayKey: THU, planConfirmedAt, planDraftedAt: null, planUpdatedAt: null, closedAt: null, closedBy: null, dayStartHour: 4,
 });
 
 const topics = [topic('B', 2, { colorKey: 'health' }), topic('A', 1)];
@@ -499,5 +499,73 @@ describe('drafts (ADR-010)', () => {
     expect(find(d, 'def')).toMatchObject({ ticked: false });
     // an unplanned, undrafted day would have pre-ticked the default
     expect(find(build(tasks, day(null)), 'def').ticked).toBe(true);
+  });
+});
+
+describe('default changed after the plan (chunk 9)', () => {
+  const confirmed = (at: number): Day => day(at);
+  const drafted = (at: number): Day => ({ ...day(null), planDraftedAt: at });
+
+  it('default turned on after confirmation: a repeating library task shows ticked ("default")', () => {
+    const d = build([task('b', 'A', 1, { isDefault: true, defaultChangedAt: 200 })], confirmed(100), [dayTask('x', { taskId: null })]);
+    expect(find(d, 'b')).toMatchObject({ ticked: true, reason: 'default', dayTaskId: null });
+  });
+  it('default turned on before (or at) confirmation stays unticked: the user unticked it', () => {
+    const before = build([task('b', 'A', 1, { defaultChangedAt: 50 })], confirmed(100), [dayTask('x', { taskId: null })]);
+    const same = build([task('b', 'A', 1, { defaultChangedAt: 100 })], confirmed(100), [dayTask('x', { taskId: null })]);
+    const never = build([task('b', 'A', 1)], confirmed(100), [dayTask('x', { taskId: null })]);
+    for (const p of [before, same, never]) expect(find(p, 'b')).toMatchObject({ ticked: false, reason: 'default' });
+  });
+  it('default turned on after, but the task does not repeat that day: nothing', () => {
+    const d = build([task('b', 'A', 1, { repeatMask: MON_BIT, defaultChangedAt: 200 })], confirmed(100), []);
+    expect(find(d, 'b')).toMatchObject({ ticked: false, reason: 'not_on_day' });
+  });
+  it('a task whose default was turned off after: its saved row shows unticked', () => {
+    const t = task('c', 'A', 1, { isDefault: false, defaultChangedAt: 200 });
+    const d = build([t], confirmed(100), [dayTask('c1', { taskId: 'c' })]);
+    expect(find(d, 'c1')).toMatchObject({ ticked: false, reason: 'saved', dayTaskId: 'c1' });
+  });
+  it('turned off after, but the row is finished or forwarded: stays ticked', () => {
+    const t = task('c', 'A', 1, { isDefault: false, defaultChangedAt: 200 });
+    const done = build([t], confirmed(100), [dayTask('c1', { taskId: 'c', completedAt: 150 })]);
+    const fwd = build([t], confirmed(100), [dayTask('c1', { taskId: 'c', forwardedFromDayKey: '2026-10-28' })]);
+    expect(find(done, 'c1').ticked).toBe(true);
+    expect(find(fwd, 'c1').ticked).toBe(true);
+  });
+  it('a non-default task the user ticked stays ticked; other edits never move a tick', () => {
+    const t = task('n', 'A', 1, { isDefault: false, defaultChangedAt: 50, name: 'renamed', minutes: 45 });
+    const d = build([t], confirmed(100), [dayTask('n1', { taskId: 'n' })]);
+    expect(find(d, 'n1').ticked).toBe(true);
+    const nul = build([task('m', 'A', 1, { isDefault: false })], confirmed(100), [dayTask('m1', { taskId: 'm' })]);
+    expect(find(nul, 'm1').ticked).toBe(true);
+  });
+  it('a default that stayed on keeps its saved row ticked', () => {
+    const d = build([task('c', 'A', 1, { defaultChangedAt: 200 })], confirmed(100), [dayTask('c1', { taskId: 'c' })]);
+    expect(find(d, 'c1').ticked).toBe(true);
+  });
+  it('the last save (planUpdatedAt) is the plan time when set: a re-confirm after the change wins', () => {
+    const reconfirmed: Day = { ...confirmed(100), planUpdatedAt: 300 };
+    const on = build([task('b', 'A', 1, { isDefault: true, defaultChangedAt: 200 })], reconfirmed, [dayTask('x', { taskId: null })]);
+    expect(find(on, 'b').ticked).toBe(false);
+    const off = build([task('c', 'A', 1, { isDefault: false, defaultChangedAt: 200 })], reconfirmed, [dayTask('c1', { taskId: 'c' })]);
+    expect(find(off, 'c1').ticked).toBe(true);
+    const after = build([task('b', 'A', 1, { isDefault: true, defaultChangedAt: 400 })], reconfirmed, [dayTask('x', { taskId: null })]);
+    expect(find(after, 'b').ticked).toBe(true);
+  });
+  it('same rules for a drafted day', () => {
+    const on = build([task('b', 'A', 1, { defaultChangedAt: 200 })], drafted(100), []);
+    expect(find(on, 'b')).toMatchObject({ ticked: true, reason: 'default' });
+    const off = build([task('c', 'A', 1, { isDefault: false, defaultChangedAt: 200 })], drafted(100), [dayTask('c1', { taskId: 'c' })]);
+    expect(find(off, 'c1').ticked).toBe(false);
+  });
+  it('Confirm drops an unticked not-started row and inserts a newly ticked default', () => {
+    const tasks = [
+      task('b', 'A', 1, { defaultChangedAt: 200 }),
+      task('c', 'A', 2, { isDefault: false, defaultChangedAt: 200 }),
+    ];
+    const existing = [dayTask('c1', { taskId: 'c' })];
+    const r = confirmPlan(build(tasks, confirmed(100), existing), existing, []);
+    expect(r.insert.map((i) => i.taskId)).toEqual(['b']);
+    expect(r.deleteIds).toEqual(['c1']);
   });
 });

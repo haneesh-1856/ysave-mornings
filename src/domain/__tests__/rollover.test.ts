@@ -11,7 +11,7 @@ const dt = (id: string, dayKey: string, over: Partial<DayTask> = {}): DayTask =>
   cue: null, treat: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null, sortOrder: 0, ...over,
 });
 const dayRow = (dayKey: string, over: Partial<Day> = {}): Day => ({
-  dayKey, planConfirmedAt: 1, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4, ...over,
+  dayKey, planConfirmedAt: 1, planDraftedAt: null, planUpdatedAt: null, closedAt: null, closedBy: null, dayStartHour: 4, ...over,
 });
 const sess = (id: string, dayTaskId: string, s: number, e: number | null): Session => ({
   id, dayTaskId, startedAt: s, endedAt: e,
@@ -24,7 +24,7 @@ const bundle = (day: Day, dayTasks: DayTask[], sessions: Session[] = []): DayBun
 const topics: Topic[] = [{ id: 'A', name: 'A', colorKey: 'study', sortOrder: 1, isOpen: true, deletedAt: null }];
 const task = (id: string, over: Partial<Task> = {}): Task => ({
   id, topicId: 'A', name: id, kind: 'check', minutes: 15, repeatMask: 127, isDefault: true, cue: null,
-  treat: null, note: '', sortOrder: 1, deletedAt: null, ...over,
+  treat: null, note: '', sortOrder: 1, deletedAt: null, defaultChangedAt: null, ...over,
 });
 
 // Day with two unticked checks (c1 sort 1, c2 sort 0), a done check, a timed task.
@@ -59,7 +59,7 @@ describe('closeByHand', () => {
     ]);
     expect(ops.closeDays).toEqual([{ dayKey: D, closedAt: now, closedBy: 'user' }]);
     expect(ops.createDays).toEqual([
-      { dayKey: '2026-10-29', planConfirmedAt: null, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4 },
+      { dayKey: '2026-10-29', planConfirmedAt: null, planDraftedAt: null, planUpdatedAt: null, closedAt: null, closedBy: null, dayStartHour: 4 },
     ]);
     expect(ops.insertDayTasks).toEqual([{
       dayKey: '2026-10-29', taskId: 't1', topicId: 'H', name: 'Stretch', colorKey: 'health', kind: 'check',
@@ -233,7 +233,7 @@ describe('rollover: today', () => {
   it('creates today and prefills default tasks when there is no row', () => {
     const r = rollover(input({ tasks }));
     expect(r.createDays).toEqual([
-      { dayKey: '2026-10-29', planConfirmedAt: null, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4 },
+      { dayKey: '2026-10-29', planConfirmedAt: null, planDraftedAt: null, planUpdatedAt: null, closedAt: null, closedBy: null, dayStartHour: 4 },
     ]);
     expect(r.insertDayTasks.map((d) => d.taskId)).toEqual(['t1']);
     expect(r.insertDayTasks[0].dayKey).toBe('2026-10-29');
@@ -257,7 +257,7 @@ describe('rollover: today', () => {
   });
 
   it('never prefills a closed today, even one closed before its plan was confirmed', () => {
-    const day = dayRow('2026-10-29', { planConfirmedAt: null, planDraftedAt: null, closedAt: NOW - MIN, closedBy: 'user' });
+    const day = dayRow('2026-10-29', { planConfirmedAt: null, planDraftedAt: null, planUpdatedAt: null, closedAt: NOW - MIN, closedBy: 'user' });
     const r = rollover(input({ tasks, today: { day, dayTasks: [] } }));
     expect(r.createDays).toEqual([]);
     expect(r.insertDayTasks).toEqual([]);

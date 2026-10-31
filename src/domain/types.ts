@@ -28,12 +28,16 @@ export interface Task {
   note: string;
   sortOrder: number;
   deletedAt: Epoch | null;
+  /** When isDefault last changed (also set when created as default); null = never. Compared with a plan's time. */
+  defaultChangedAt: Epoch | null;
 }
 
 export interface Day {
   dayKey: DayKey;
   planConfirmedAt: Epoch | null;
   planDraftedAt: Epoch | null;
+  /** Last time the user saved this plan (every confirm, re-confirm and draft save); null on old rows. */
+  planUpdatedAt: Epoch | null;
   closedAt: Epoch | null;
   closedBy: ClosedBy | null;
   dayStartHour: number;

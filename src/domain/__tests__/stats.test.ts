@@ -3,7 +3,7 @@ import type { DayBundle, DayTask, Session, Task } from '../types';
 
 const task = (o: Partial<Task>): Task => ({
   id: 'x', topicId: 'a', name: 'n', kind: 'timed', minutes: 30, repeatMask: 0b0000101,
-  isDefault: true, cue: null, treat: null, note: '', sortOrder: 0, deletedAt: null, ...o,
+  isDefault: true, cue: null, treat: null, note: '', sortOrder: 0, deletedAt: null, defaultChangedAt: null, ...o,
 });
 const dt = (id: string, topicId: string, completedAt: number | null): DayTask => ({
   id, dayKey: '2026-10-26', taskId: null, topicId, name: id, colorKey: 'study', kind: 'check',
@@ -11,7 +11,7 @@ const dt = (id: string, topicId: string, completedAt: number | null): DayTask =>
   closeOutcome: null, sortOrder: 0,
 });
 const bundle = (dayTasks: DayTask[], planConfirmedAt: number | null = null): DayBundle => ({
-  day: { dayKey: '2026-10-26', planConfirmedAt, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4 },
+  day: { dayKey: '2026-10-26', planConfirmedAt, planDraftedAt: null, planUpdatedAt: null, closedAt: null, closedBy: null, dayStartHour: 4 },
   dayTasks, sessionsByDayTask: {},
 });
 

@@ -90,6 +90,7 @@ function applyPlanResult(tx: Executor, input: PlanWrite): void {
       dayKey,
       planConfirmedAt: null,
       planDraftedAt: null,
+      planUpdatedAt: null,
       closedAt: null,
       closedBy: null,
       dayStartHour,
@@ -132,11 +133,13 @@ function applyPlanResult(tx: Executor, input: PlanWrite): void {
 /**
  * Applies a confirmPlan() result in ONE transaction (doc 04 §2). Ensures the days row exists
  * (created with `dayStartHour` if missing) and sets planConfirmedAt = now only if it is still null.
- * A draft's planDraftedAt is kept as history (ADR-010).
+ * planUpdatedAt = now on every confirm, including a re-confirm (chunk 9 fix: the user's latest choices win
+ * over earlier default changes). A draft's planDraftedAt is kept as history (ADR-010).
  */
 export function saveConfirmedPlan(db: DB, input: PlanWrite): void {
   db.transaction((tx) => {
     applyPlanResult(tx, input);
+    tx.update(days).set({ planUpdatedAt: input.now, updatedAt: input.now }).where(eq(days.dayKey, input.dayKey)).run();
     tx.update(days)
       .set({ planConfirmedAt: input.now, updatedAt: input.now })
       .where(and(eq(days.dayKey, input.dayKey), isNull(days.planConfirmedAt)))
@@ -164,7 +167,7 @@ export function saveDraftPlan(db: DB, input: PlanWrite): void {
       .get();
     if (withSession) throw new ValidationError('dayKey', `${dayKey} already has progress`);
     applyPlanResult(tx, input);
-    tx.update(days).set({ planDraftedAt: now, updatedAt: now }).where(eq(days.dayKey, dayKey)).run();
+    tx.update(days).set({ planDraftedAt: now, planUpdatedAt: now, updatedAt: now }).where(eq(days.dayKey, dayKey)).run();
   });
 }
 

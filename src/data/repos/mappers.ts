@@ -33,12 +33,14 @@ export const toTask = (r: TaskRow): Task => ({
   note: r.note,
   sortOrder: r.sortOrder,
   deletedAt: r.deletedAt ?? null,
+  defaultChangedAt: r.defaultChangedAt ?? null,
 });
 
 export const toDay = (r: DayRow): Day => ({
   dayKey: r.dayKey,
   planConfirmedAt: r.planConfirmedAt ?? null,
   planDraftedAt: r.planDraftedAt ?? null,
+  planUpdatedAt: r.planUpdatedAt ?? null,
   closedAt: r.closedAt ?? null,
   closedBy: r.closedBy ?? null,
   dayStartHour: r.dayStartHour,

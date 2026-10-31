@@ -17,7 +17,7 @@ const dt = (over: Partial<DayTask> = {}): DayTask => ({
   sortOrder: 0, ...over,
 });
 const day = (over: Partial<Day> = {}): Day => ({
-  dayKey: '2026-10-29', planConfirmedAt: T0, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4, ...over,
+  dayKey: '2026-10-29', planConfirmedAt: T0, planDraftedAt: null, planUpdatedAt: null, closedAt: null, closedBy: null, dayStartHour: 4, ...over,
 });
 
 describe('focusedMs / remainingMs', () => {

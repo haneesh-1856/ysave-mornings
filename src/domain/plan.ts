@@ -83,6 +83,10 @@ function libraryRow(t: Task, topic: Topic, reason: PlanReason, ticked: boolean):
  *   ticked, library tasks not in it are unticked, and no defaults are re-added.
  * - Confirmed plan: every existing dayTask is a ticked row (reason 'saved', or 'forwarded' if it was
  *   forwarded); library tasks not already in it appear unticked.
+ * - In a confirmed or drafted plan, a task whose isDefault changed AFTER the plan time (planUpdatedAt ?? planConfirmedAt ?? planDraftedAt,
+ *   compared with task.defaultChangedAt) moves its tick: default turned on and repeating that day -> a library row
+ *   ticked ('default'); default turned off -> its existing row unticked (not for forwarded or completed rows).
+ *   Choices made at or before the plan win; other edits never move a tick.
  * - A deleted task keeps its row only if a used dayTask refers to it (§11).
  * - A library task that already has a used dayTask is not listed twice.
  * Check-kind saved rows have budgetSec 0, so their minutes come from the library task (else 15).
@@ -90,6 +94,11 @@ function libraryRow(t: Task, topic: Topic, reason: PlanReason, ticked: boolean):
 export function buildPlan(input: PlanInput): PlanDraft {
   const { dayKey, topics, tasks, day, dayTasks } = input;
   const confirmed = day != null && (day.planConfirmedAt != null || day.planDraftedAt != null);
+  // When the plan was last saved (confirm, re-confirm or draft); a task whose default changed after it moves
+  // its tick (chunk 9). planUpdatedAt is null on rows from before it existed.
+  const planAt = day?.planUpdatedAt ?? day?.planConfirmedAt ?? day?.planDraftedAt ?? null;
+  const defaultChangedAfterPlan = (t: Task | undefined): boolean =>
+    planAt != null && t?.defaultChangedAt != null && t.defaultChangedAt > planAt;
 
   const liveTopics = topics
     .filter((t) => t.deletedAt == null)
@@ -131,7 +140,8 @@ export function buildPlan(input: PlanInput): PlanDraft {
         minutes,
         cue: d.cue,
         treat: d.treat,
-        ticked: true,
+        // default turned off after the plan: shown unticked (Confirm then drops it, unless it has progress)
+        ticked: forwarded || d.completedAt != null || lib?.isDefault !== false || !defaultChangedAfterPlan(lib),
         reason: forwarded ? 'forwarded' : 'saved',
         forwardedFromDayKey: d.forwardedFromDayKey,
         dayTaskId: d.id,
@@ -152,6 +162,7 @@ export function buildPlan(input: PlanInput): PlanDraft {
     let row: PlanRow;
     if (!repeats) row = libraryRow(t, topic, 'not_on_day', false);
     else if (!confirmed && t.isDefault) row = libraryRow(t, topic, 'default', true);
+    else if (confirmed && t.isDefault && defaultChangedAfterPlan(t)) row = libraryRow(t, topic, 'default', true);
     else row = libraryRow(t, topic, t.isDefault ? 'default' : 'repeats', false);
     if (att) {
       row = { ...row, ticked: true, dayTaskId: att.id, minutes: dayMinutes(att, t), cue: att.cue, treat: att.treat };
