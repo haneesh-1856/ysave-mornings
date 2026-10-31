@@ -14,10 +14,12 @@ export interface Ops {
   closeDays: { dayKey: DayKey; closedAt: Epoch; closedBy: ClosedBy }[];
   createDays: Day[];
   insertDayTasks: DayTaskDraft[];
+  /** Existing next-day rows that a moved task landed on: they become "from <day>" rows (no duplicate). */
+  forwardDayTasks: { dayTaskId: string; forwardedFromDayKey: DayKey }[];
 }
 
 const emptyOps = (): Ops => ({
-  closeSessions: [], completions: [], outcomes: [], closeDays: [], createDays: [], insertDayTasks: [],
+  closeSessions: [], completions: [], outcomes: [], closeDays: [], createDays: [], insertDayTasks: [], forwardDayTasks: [],
 });
 
 const bySortOrder = (a: DayTask, b: DayTask): number => a.sortOrder - b.sortOrder;
@@ -58,8 +60,8 @@ function closeOpenSessions(
  *
  * `next` = the next day's state: its `days` row (or null), its existing rows (for the unique
  * (dayKey, taskId) index and sortOrder), and the dayStartHour a new next-day row would snapshot.
- * A moved task whose non-null taskId already has a row in the next day is not inserted again (already
- * planned there); its outcome is still 'moved'. Timed tasks are never forwarded.
+ * A moved task whose non-null taskId already has a row in the next day (a draft, a plan, a repeat) is not
+ * inserted again: that row is marked forwarded instead (forwardDayTasks), so it still arrives "from <day>". Timed tasks are never forwarded.
  */
 export function closeByHand(
   b: DayBundle,
@@ -78,13 +80,20 @@ export function closeByHand(
   ops.closeDays = [{ dayKey: b.day.dayKey, closedAt: now, closedBy: 'user' }];
 
   const nextKey = addDays(b.day.dayKey, 1);
-  const takenTaskIds = new Set(next.dayTasks.map((d) => d.taskId).filter((id): id is string => id !== null));
+  const taken = new Map<string, DayTask>();
+  for (const d of next.dayTasks) if (d.taskId !== null) taken.set(d.taskId, d);
   let sortOrder = next.dayTasks.reduce((m, d) => Math.max(m, d.sortOrder), -1) + 1;
   for (const t of untickedChecks(b)) {
     const closeOutcome = outcomes[t.id];
     ops.outcomes.push({ dayTaskId: t.id, closeOutcome });
     if (closeOutcome !== 'moved') continue;
-    if (t.taskId !== null && takenTaskIds.has(t.taskId)) continue;
+    const existing = t.taskId !== null ? taken.get(t.taskId) : undefined;
+    if (existing) {
+      if (existing.forwardedFromDayKey === null) {
+        ops.forwardDayTasks.push({ dayTaskId: existing.id, forwardedFromDayKey: b.day.dayKey });
+      }
+      continue;
+    }
     ops.insertDayTasks.push({
       dayKey: nextKey,
       taskId: t.taskId,

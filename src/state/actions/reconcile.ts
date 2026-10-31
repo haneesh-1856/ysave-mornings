@@ -16,7 +16,8 @@ import { todayKey as resolveTodayKey } from '../today';
 function isEmpty(o: Ops): boolean {
   return (
     o.closeSessions.length === 0 && o.completions.length === 0 && o.outcomes.length === 0 &&
-    o.closeDays.length === 0 && o.createDays.length === 0 && o.insertDayTasks.length === 0
+    o.closeDays.length === 0 && o.createDays.length === 0 && o.insertDayTasks.length === 0 &&
+    o.forwardDayTasks.length === 0
   );
 }
 

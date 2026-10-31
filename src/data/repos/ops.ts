@@ -6,7 +6,7 @@ import type { DB } from '../types';
 
 /**
  * The single bridge from domain decisions (rollover / closeByHand Ops) to storage: ONE transaction,
- * order createDays -> closeSessions -> completions -> outcomes -> closeDays -> insertDayTasks.
+ * order createDays -> closeSessions -> completions -> outcomes -> closeDays -> insertDayTasks -> forwardDayTasks.
  * Any failure rolls everything back. `now` stamps createdAt/updatedAt; new day_tasks get newId().
  */
 export function applyOps(db: DB, ops: Ops, newId: () => string, now: Epoch): void {
@@ -28,6 +28,12 @@ export function applyOps(db: DB, ops: Ops, newId: () => string, now: Epoch): voi
     }
     for (const draft of ops.insertDayTasks) {
       tx.insert(dayTasks).values({ ...draft, id: newId(), createdAt: now, updatedAt: now }).run();
+    }
+    for (const f of ops.forwardDayTasks) {
+      tx.update(dayTasks)
+        .set({ forwardedFromDayKey: f.forwardedFromDayKey, updatedAt: now })
+        .where(eq(dayTasks.id, f.dayTaskId))
+        .run();
     }
   });
 }

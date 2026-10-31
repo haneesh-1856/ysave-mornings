@@ -267,7 +267,7 @@ describe('RunScreen', () => {
     // Close today behind the screen's back, then press Start.
     applyOps(
       getDb(),
-      { closeSessions: [], completions: [], outcomes: [], insertDayTasks: [], createDays: [], closeDays: [{ dayKey: TODAY, closedAt: T0, closedBy: 'user' }] },
+      { closeSessions: [], completions: [], outcomes: [], insertDayTasks: [], forwardDayTasks: [], createDays: [], closeDays: [{ dayKey: TODAY, closedAt: T0, closedBy: 'user' }] },
       () => 'x',
       T0,
     );

@@ -113,7 +113,7 @@ describe('reconcile: stale days and the day boundary', () => {
     const c = d26.dayTasks.find((d) => d.name === 'C')!;
     startTask(y.id); // left running on the 26th
     applyOps(db, {
-      closeSessions: [], completions: [], outcomes: [], closeDays: [], insertDayTasks: [],
+      closeSessions: [], completions: [], outcomes: [], closeDays: [], insertDayTasks: [], forwardDayTasks: [],
       createDays: [{ dayKey: '2026-10-27', planConfirmedAt: null, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: 4 }],
     }, () => 'unused', t);
     t = T0; // the 29th

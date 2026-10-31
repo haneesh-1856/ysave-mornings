@@ -128,6 +128,7 @@ describe('applyOps', () => {
       outcomes: [],
       closeDays: [{ dayKey: D27, closedAt: 500, closedBy: 'auto' }],
       createDays: [{ dayKey: D28, planConfirmedAt: null, planDraftedAt: null, closedAt: null, closedBy: null, dayStartHour: H }],
+      forwardDayTasks: [],
       insertDayTasks: [
         // replaced below: FK violation (no days row for 2000-01-01), so the LAST step fails
       ],

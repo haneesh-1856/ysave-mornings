@@ -123,7 +123,7 @@ describe('PlanScreen', () => {
     applyOps(
       getDb(),
       {
-        closeSessions: [], completions: [], outcomes: [], insertDayTasks: [], closeDays: [],
+        closeSessions: [], completions: [], outcomes: [], insertDayTasks: [], forwardDayTasks: [], closeDays: [],
         createDays: [{ dayKey: '2026-10-29', planConfirmedAt: null, planDraftedAt: null, closedAt: 1, closedBy: 'user', dayStartHour: 4 }],
       },
       () => 'x',

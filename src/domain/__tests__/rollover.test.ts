@@ -83,11 +83,23 @@ describe('closeByHand', () => {
     expect(ops.insertDayTasks.map((d) => d.taskId)).toEqual(['t2', 't1']);
   });
 
-  it('skips inserting a moved task already in the next day but still records moved', () => {
+  it('marks a moved task already in the next day as forwarded instead of inserting it again', () => {
     const next = { day: dayRow('2026-10-29'), dayTasks: [dt('n1', '2026-10-29', { taskId: 't1' })], dayStartHour: 4 };
     const ops = closeByHand(mk(), both, next, now);
     expect(ops.insertDayTasks).toEqual([]);
+    expect(ops.forwardDayTasks).toEqual([{ dayTaskId: 'n1', forwardedFromDayKey: '2026-10-28' }]);
     expect(ops.outcomes).toContainEqual({ dayTaskId: 'c1', closeOutcome: 'moved' });
+  });
+
+  it('leaves a next-day row that is already forwarded alone', () => {
+    const next = {
+      day: dayRow('2026-10-29'),
+      dayTasks: [dt('n1', '2026-10-29', { taskId: 't1', forwardedFromDayKey: '2026-10-27' })],
+      dayStartHour: 4,
+    };
+    const ops = closeByHand(mk(), both, next, now);
+    expect(ops.forwardDayTasks).toEqual([]);
+    expect(ops.insertDayTasks).toEqual([]);
   });
 
   it('forwards one-off (null taskId) moved tasks even if other null-taskId rows exist', () => {
@@ -299,7 +311,7 @@ describe('rollover: idempotent', () => {
     const state = apply(first, bundles, { day: null, dayTasks: [] }, first.todayKey);
     const second = rollover(input({ tasks, openDays: state.bundles, today: state.today }));
     expect(second).toEqual({
-      closeSessions: [], completions: [], outcomes: [], closeDays: [], createDays: [], insertDayTasks: [],
+      closeSessions: [], completions: [], outcomes: [], closeDays: [], createDays: [], insertDayTasks: [], forwardDayTasks: [],
       todayKey: '2026-10-29', autoClosed: [],
     });
   });

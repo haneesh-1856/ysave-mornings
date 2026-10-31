@@ -5,7 +5,7 @@ import { View } from 'react-native';
 
 import { addDays } from '@/domain/dayKey';
 import { isGold, overtimeMs, remainingMs } from '@/domain/timer';
-import type { Epoch } from '@/domain/types';
+import type { DayTask, Epoch } from '@/domain/types';
 import { toggleCheckTask } from '@/state/actions/run';
 import { now } from '@/state/clock';
 import { ValidationError } from '@/state/errors';
@@ -13,6 +13,7 @@ import { useChain } from '@/state/hooks/useChain';
 import { useDayPlan } from '@/state/hooks/useDayPlan';
 import { useNow } from '@/state/hooks/useNow';
 import { usePlannableDays } from '@/state/hooks/usePlannableDays';
+import { usePlanTopics } from '@/state/hooks/usePlanTopics';
 import { useCompletionWatcher } from '@/state/hooks/useRunTask';
 import { useToday } from '@/state/hooks/useToday';
 import type { TodayRow } from '@/state/hooks/useToday';
@@ -28,11 +29,40 @@ import { Dock } from '@/ui/Dock';
 import { Fold } from '@/ui/Fold';
 import { Header } from '@/ui/Header';
 import { Screen } from '@/ui/Screen';
+import { REMOVED_TOPIC } from '@/ui/PlannedList';
 import { T } from '@/ui/T';
 import { TaskRow } from '@/ui/TaskRow';
 import { extraText, minutesLeftText } from '@/ui/timeText';
 
 const tasks = (n: number) => `${n} ${n === 1 ? 'task' : 'tasks'}`;
+
+/**
+ * Once today is closed, the Today tab is where tomorrow is looked for: list tomorrow's stored rows (moved tasks
+ * "from <weekday>" included) so nothing planned for tomorrow is hidden behind a count.
+ */
+function TomorrowTasks({ rows, topicName }: { rows: DayTask[]; topicName: (id: string) => string }) {
+  const t = useTheme();
+  return (
+    <View style={{ gap: 4 }}>
+      {rows.map((r) => {
+        const from = r.forwardedFromDayKey ? `from ${weekdayName(r.forwardedFromDayKey)}` : null;
+        return (
+          <View
+            key={r.id}
+            accessible
+            accessibilityLabel={`Tomorrow: ${r.name}${from ? `, ${from}` : ''}`}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 }}>
+            <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: t.topic(r.colorKey).color }} />
+            <View style={{ flex: 1 }}>
+              <T numberOfLines={1}>{r.name}</T>
+              <T variant="sub">{from ? `${topicName(r.topicId)} · ${from}` : topicName(r.topicId)}</T>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 type Timed = Exclude<TodayRow['state'], 'check-open' | 'check-done'>;
 
@@ -91,12 +121,14 @@ const TimedRow = memo(function TimedRow({ row, onOpen, locked }: { row: TodayRow
 
 const CheckTaskRow = memo(function CheckTaskRow({ row, onToggle, locked }: { row: TodayRow; onToggle: (id: string) => void; locked: boolean }) {
   const from = row.dayTask.forwardedFromDayKey;
+  const moved = row.dayTask.closeOutcome === 'moved';
   return (
     <CheckRow
       name={row.dayTask.name}
       topicColor={row.dayTask.colorKey}
       done={row.state === 'check-done'}
       forwardedFrom={from ? weekdayName(from) : undefined}
+      movedTo={moved ? weekdayName(addDays(row.dayTask.dayKey, 1)) : undefined}
       onToggle={() => onToggle(row.dayTask.id)}
       disabled={locked}
     />
@@ -112,6 +144,7 @@ export default function TodayScreen() {
   const tomorrowPlan = useDayPlan(tomorrow);
   const tomorrowPlanned = tomorrowPlan.day?.planConfirmedAt != null;
   const chain = useChain();
+  const planTopics = usePlanTopics();
   const [shut, setShut] = useState<Record<string, boolean>>({});
 
   const plan = (dayKey: string) => router.push({ pathname: '/plan/[dayKey]', params: { dayKey } });
@@ -180,6 +213,12 @@ export default function TodayScreen() {
       {tomorrowPlanned ? (
         <Card>
           <T weight="bold">{`Tomorrow is planned · ${tasks(tomorrowPlan.rows.length)}`}</T>
+          {closed ? (
+            <TomorrowTasks
+              rows={tomorrowPlan.rows}
+              topicName={(id) => planTopics.find((x) => x.id === id)?.name ?? REMOVED_TOPIC}
+            />
+          ) : null}
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <Button label="See" kind="ghost" onPress={() => see(tomorrow)} />
             <Button label="Edit" kind="ghost" onPress={() => plan(tomorrow)} />

@@ -49,7 +49,7 @@ function closeToday() {
   applyOps(
     db,
     {
-      closeSessions: [], completions: [], outcomes: [], insertDayTasks: [],
+      closeSessions: [], completions: [], outcomes: [], insertDayTasks: [], forwardDayTasks: [],
       createDays: exists ? [] : [{ ...closed, planConfirmedAt: null, planDraftedAt: null, dayStartHour: 4 }],
       closeDays: exists ? [closed] : [],
     },
