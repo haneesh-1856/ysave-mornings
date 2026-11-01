@@ -191,6 +191,7 @@ export default function TodayScreen() {
         </View>
       ) : null}
       {canEditToday && !todayPlanned ? <Button testID="today-plan-today" label="Plan today" onPress={() => plan(todayKey)} /> : null}
+      {/* One tomorrow control: the card once tomorrow is confirmed, otherwise the Plan tomorrow button. */}
       {tomorrowPlanned ? (
         <Card>
           <T weight="bold">{`Tomorrow is planned · ${tasks(tomorrowPlan.rows.length)}`}</T>
@@ -205,8 +206,9 @@ export default function TodayScreen() {
             <Button label="Edit" kind="ghost" onPress={() => plan(tomorrow)} />
           </View>
         </Card>
-      ) : null}
-      <Button testID="today-plan-tomorrow" label="Plan tomorrow" kind={tomorrowPlanned ? 'ghost' : 'primary'} onPress={() => plan(tomorrow)} />
+      ) : (
+        <Button testID="today-plan-tomorrow" label="Plan tomorrow" onPress={() => plan(tomorrow)} />
+      )}
       {empty ? <T variant="sub">Nothing planned for today</T> : null}
       {groups.map((g) => {
         const doneInGroup = g.rows.filter((r) => r.dayTask.completedAt !== null).length;

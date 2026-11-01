@@ -25,6 +25,7 @@ Interfaces: contract.md (written before the code chunks).
 | 14 | Deleting a topic asks whether to move its tasks first (ADR-013) | phone check | [chunk-14](chunk-14-delete-topic-move.md) | built, awaiting check |
 | 15 | Deleting a topic: pick a destination (or Delete) for each task | phone check | [chunk-15](chunk-15-per-task-move.md) | built, awaiting check |
 | 16 | Today: drop the "Today is planned" card, keep one Edit button by the title | phone check | [chunk-16](chunk-16-today-edit.md) | built, awaiting check |
+| 17 | Today: one tomorrow control (card when planned, else Plan tomorrow) | phone check | [chunk-17](chunk-17-one-tomorrow-control.md) | built, awaiting check |
 
 ## Chunk 0 · App icon + splash
 **Choice (user, 2026-10-30):** "The Unfinished Sun", from the user's own reference image: a sun whose ring has one

@@ -180,6 +180,7 @@ Rule (ADR-012):
 - Chunk 14: see below.
 - Chunk 15: see below.
 - Chunk 16: see below.
+- Chunk 17: see below.
 
 ## Chunk 13 · Library: new task + topic picker (phone check, user 2026-10-31)
 User: "...in the library there should also be not just add new topic, also add new task."
@@ -220,3 +221,10 @@ Rule (ADR-009 kept):
 - One "Edit" button (testID `today-edit`, accessibilityLabel "Edit today's plan") sits in the Header row, right side, pushing `/plan/<todayKey>`. Shown only when today is planned and open (plannable, not closed).
 - `Header` gets an optional `right?: ReactNode`; other callers unchanged.
 - Unchanged: "Plan today" (unplanned), tomorrow card (See / Edit), "Plan tomorrow", closed card, Close, folds, Dock, Collection. The `/planned/[dayKey]` route stays (Morning's "See today's plan", Plan confirm).
+
+## Chunk 17 · Today: one tomorrow control (phone check, user 2026-10-31)
+User: "Once some tasks are already planned for tomorrow, we don't need that Plan tomorrow button again. It's only needed when nothing is yet selected for tomorrow; if yes, then only that 'Tomorrow is planned' tab-like structure is needed. So at a time only one is required."
+Rule:
+- Tomorrow confirmed (`planConfirmedAt` set): only the "Tomorrow is planned · N tasks" card (See / Edit; the task list once today is closed). No "Plan tomorrow" button.
+- Otherwise (nothing confirmed, a draft alone included): only the primary "Plan tomorrow" button (testID `today-plan-tomorrow`). No card.
+- Unchanged: Edit by the title, Plan today, closed card, Close, folds, Dock, Collection. Close's own "Plan tomorrow" is a different screen and stays.

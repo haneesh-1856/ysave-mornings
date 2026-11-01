@@ -7,7 +7,8 @@ import { applyOps } from '@/data/repos/ops';
 import { dayStartOf } from '@/domain/dayKey';
 import type { PlanDraft, PlanRow } from '@/domain/plan';
 import { createTask, createTopic } from '@/state/actions/library';
-import { confirmDayPlan } from '@/state/actions/plan';
+import { confirmDayPlan, saveDayDraft } from '@/state/actions/plan';
+import { reconcile } from '@/state/actions/reconcile';
 import { saveLook } from '@/state/actions/look';
 import { pauseTask, startTask } from '@/state/actions/run';
 import { setClockOverride } from '@/state/clock';
@@ -229,7 +230,7 @@ describe('Today: entry cards', () => {
     expect(screen.getByRole('button', { name: 'Plan today' })).toBeTruthy();
   });
 
-  it('shows the tomorrow card with See and Edit, and a ghost Plan tomorrow', async () => {
+  it('tomorrow confirmed: shows the card with See and Edit, and no Plan tomorrow button', async () => {
     plan(TOMORROW);
     await renderThemed(<TodayScreen />);
     expect(screen.getByText('Tomorrow is planned · 4 tasks')).toBeTruthy();
@@ -237,7 +238,36 @@ describe('Today: entry cards', () => {
     expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/planned/[dayKey]', params: { dayKey: TOMORROW } });
     await fireEvent.press(screen.getByRole('button', { name: 'Edit' }));
     expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/plan/[dayKey]', params: { dayKey: TOMORROW } });
+    expect(screen.queryByRole('button', { name: 'Plan tomorrow' })).toBeNull();
+    expect(screen.queryByTestId('today-plan-tomorrow')).toBeNull();
+  });
+
+  it('tomorrow not planned: shows the Plan tomorrow button and no card', async () => {
+    await renderThemed(<TodayScreen />);
+    expect(screen.getByTestId('today-plan-tomorrow')).toBeTruthy();
+    expect(screen.queryByText(/Tomorrow is planned/)).toBeNull();
+  });
+
+  it('only a draft for tomorrow (drafted two days ahead, then the day rolls over): shows Plan tomorrow, no card', async () => {
+    const study = createTopic({ name: 'Study', colorKey: 'study' });
+    const dayAfter = '2026-10-31';
+    saveDayDraft(dayAfter, { dayKey: dayAfter, groups: [{ topicId: study.id, rows: [row(study.id, 'Read')] }], notOn: [] });
+    t = dayStartOf(TOMORROW, 4) + 6 * 3_600_000; // now tomorrow is the drafted day
+    reconcile();
+    await renderThemed(<TodayScreen />);
+    expect(getDay(getDb(), dayAfter)?.planConfirmedAt ?? null).toBeNull();
     expect(screen.getByRole('button', { name: 'Plan tomorrow' })).toBeTruthy();
+    expect(screen.queryByText(/Tomorrow is planned/)).toBeNull();
+  });
+
+  it('confirming tomorrow while Today is mounted swaps the button for the card', async () => {
+    await renderThemed(<TodayScreen />);
+    expect(screen.getByTestId('today-plan-tomorrow')).toBeTruthy();
+    await act(async () => {
+      plan(TOMORROW);
+    });
+    expect(screen.queryByTestId('today-plan-tomorrow')).toBeNull();
+    expect(screen.getByText('Tomorrow is planned · 4 tasks')).toBeTruthy();
   });
 
   it('updates a mounted Today when today gets planned', async () => {
@@ -251,6 +281,16 @@ describe('Today: entry cards', () => {
 });
 
 describe('Today: closed day', () => {
+  it('with tomorrow confirmed: card lists the tasks of tomorrow, no Plan tomorrow button', async () => {
+    plan(TODAY);
+    plan(TOMORROW);
+    closeToday();
+    await renderThemed(<TodayScreen />);
+    expect(screen.getByText('Tomorrow is planned · 4 tasks')).toBeTruthy();
+    expect(screen.getByLabelText('Tomorrow: Read')).toBeTruthy();
+    expect(screen.queryByTestId('today-plan-tomorrow')).toBeNull();
+  });
+
   it('is read-only: banner, no Edit, no Plan today, rows still open the (read-only) task page', async () => {
     plan(TODAY);
     closeToday();
