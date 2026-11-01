@@ -1,7 +1,7 @@
 /** @jest-environment node */
 import { startDecision } from '../../domain/timer';
 import { ConflictError, NotFoundError, sqliteMessage } from '../errors';
-import { endSession, getOpenSession, startSession } from '../repos/sessions';
+import { endSession, focusTotalsByDay, getOpenSession, startSession } from '../repos/sessions';
 import { days, dayTasks, sessions } from '../schema';
 import { createTestDb } from './testDb';
 
@@ -100,5 +100,25 @@ describe('sqliteMessage', () => {
     expect(sqliteMessage({ message: 'a', cause: 42 })).toBe('a');
     const deep = { message: '1', cause: { message: '2', cause: { message: '3', cause: { message: '4', cause: { message: '5' } } } } };
     expect(sqliteMessage(deep)).toBe('1 | 2 | 3 | 4');
+  });
+});
+
+describe('focusTotalsByDay', () => {
+  it('sums per earlier day in one query; open sessions count to `at`; the cutoff day and later are left out', () => {
+    const { db, newId } = setup();
+    db.insert(days).values({ dayKey: '2026-10-28', planConfirmedAt: 1, planDraftedAt: null, planUpdatedAt: null, closedAt: 9, closedBy: 'user', dayStartHour: 4, createdAt: 1, updatedAt: 1 }).run();
+    db.insert(dayTasks).values({
+      id: 'P', dayKey: '2026-10-28', taskId: null, topicId: 't', name: 'P', colorKey: 'study', kind: 'timed',
+      budgetSec: 600, cue: null, treat: null, note: null, forwardedFromDayKey: null, completedAt: null, closeOutcome: null,
+      sortOrder: 0, createdAt: 1, updatedAt: 1,
+    }).run();
+    const s1 = startSession(db, { dayTaskId: 'P', closeSessionId: null, now: 1000, newId });
+    endSession(db, s1.id, 3000);
+    const s2 = startSession(db, { dayTaskId: 'P', closeSessionId: null, now: 5000, newId });
+    endSession(db, s2.id, 6000);
+    startSession(db, { dayTaskId: 'A', closeSessionId: null, now: 100, newId }); // open, on 2026-10-29
+    expect(focusTotalsByDay(db, '2026-10-29', 9999)).toEqual({ '2026-10-28': 3000 });
+    expect(focusTotalsByDay(db, '2026-10-30', 9999)).toEqual({ '2026-10-28': 3000, '2026-10-29': 9899 });
+    expect(focusTotalsByDay(db, '2026-10-28', 9999)).toEqual({});
   });
 });

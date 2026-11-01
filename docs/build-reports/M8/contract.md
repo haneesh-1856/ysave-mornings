@@ -237,3 +237,11 @@ Rule (doc 04 section 6, ADR-014):
 - Next day has a row for the same non-null taskId: timed row gets `budgetSec += leftover` (total capped at 180 min) and is marked forwarded (note fills only an empty note); a check row is only marked forwarded; an already-forwarded row is left alone. Otherwise a new timed row with `budgetSec` = leftover, `forwardedFromDayKey` = today, cue/treat/note copied.
 - Auto-close unchanged: timed tasks get no outcome, nothing is carried.
 - UI: card "Not finished today"; timed row shows "N min left" and "Move N min to <day>".
+
+## Chunk 19 · Close: moments at close, data and rules (user 2026-11-01)
+User chose six moments for a by-hand close (ADR-015, doc 04 section 12). This chunk has no UI.
+Rule:
+- Order: longest, day, best, streak, week, month. `closeToday` now returns `Moment[]` (empty if `momentsEnabled` is false).
+- longest: timed task with the most focus > 0, tie to earlier sortOrder. day: always. best: beats all earlier days and the stored best, needs an earlier day with focus. streak: run ending today (days with >= 1 collection item) is a multiple of 7, once per run length. week: last day (Sunday) of the Monday-Sunday week, once per week. month: with `monthlyGoalHours` at the first close reaching it, without it on the month's last day; once per month.
+- Settings: `monthlyGoalHours` (1-744 or null), `momentsEnabled` (default true), `momentMarkers`. No new tables.
+- Auto-close: no moments, markers untouched.

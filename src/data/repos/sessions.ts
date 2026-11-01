@@ -1,7 +1,7 @@
-import { and, eq, isNull } from 'drizzle-orm';
-import type { Epoch, Session } from '../../domain/types';
+import { and, eq, isNull, lt, sql } from 'drizzle-orm';
+import type { DayKey, Epoch, Session } from '../../domain/types';
 import { ConflictError, NotFoundError, sqliteMessage } from '../errors';
-import { sessions } from '../schema';
+import { dayTasks, sessions } from '../schema';
 import type { DB } from '../types';
 import { toSession } from './mappers';
 
@@ -58,4 +58,22 @@ export function endSession(db: DB, sessionId: string, now: Epoch): Session {
   const row = db.select().from(sessions).where(eq(sessions.id, sessionId)).get();
   if (!row) throw new NotFoundError(`Session ${sessionId} not found`);
   return toSession(row);
+}
+
+/**
+ * Focused ms per day for every day before `beforeDayKey` that has a session, in ONE query (sessions joined to
+ * day_tasks, grouped by dayKey). An open session counts up to `at`; a negative length counts as 0 (same as focusedMs).
+ */
+export function focusTotalsByDay(db: DB, beforeDayKey: DayKey, at: Epoch): Record<DayKey, number> {
+  const rows = db
+    .select({
+      dayKey: dayTasks.dayKey,
+      ms: sql<number>`sum(max(0, coalesce(${sessions.endedAt}, ${at}) - ${sessions.startedAt}))`,
+    })
+    .from(sessions)
+    .innerJoin(dayTasks, eq(sessions.dayTaskId, dayTasks.id))
+    .where(lt(dayTasks.dayKey, beforeDayKey))
+    .groupBy(dayTasks.dayKey)
+    .all();
+  return Object.fromEntries(rows.map((r) => [r.dayKey, Number(r.ms)]));
 }

@@ -155,3 +155,16 @@ A gap is just a dashed link. There is no streak counter and no "broken" state.
   their order. No deletes the topic and all its tasks, as before. One transaction: a missing target, a duplicate or a
   task that isn't the topic's refuses it and changes nothing. Day rows stay as they were (snapshots). A topic with no
   tasks keeps the plain confirm.
+
+## 12. Moments at close (ADR-015)
+
+Short full-screen moments after a close **by hand** (auto-close plays none). All are computed from stored days, tasks and sessions; the day being closed counts with its sessions ended at the close instant. Play order:
+
+1. **Longest task of the day**: the timed task with the most focused time today (> 0). Ties: earlier `sortOrder`. None if no timed task has focus.
+2. **Day complete**: a by-hand close where every task of the day is done (an empty day has nothing to complete). Done / total tasks, the day's focused time, the close time. A close with tasks left plays no Day complete: it ends quietly, like the Moments off ending, with the sun's ring left open.
+3. **Personal best**: today's focused total is greater than every earlier day's total and than the stored best, and at least one earlier day had focus (the first day is never a record). Then the stored best becomes today's total.
+4. **7-day streak**: the run of consecutive days ending today reaches a multiple of 7. A day counts when it has at least one collection item (section 9 chain, section 10 days showed up); today must count. A run length is celebrated once (the marker keeps the length and the end day; a new run after a gap can celebrate again).
+5. **Week complete**: closing the last day of the Monday-Sunday week (section 1 `weekStartOf` + 6). Tasks done, focused time, gold rings (`isGold`), days showed up, week start. Once per week.
+6. **Monthly goal**: setting `monthlyGoalHours` (1-744 or none). With a goal: at the first close where the month's focused total reaches it. Without: a "month in review" when closing the last day of the month. Once per month.
+
+Settings: `monthlyGoalHours` (default none), `momentsEnabled` (default on; off returns no moments and leaves markers alone), `momentMarkers` (what has been celebrated).

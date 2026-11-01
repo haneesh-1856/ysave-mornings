@@ -5,9 +5,11 @@ import { getDayStartHour } from '../../data/repos/settings';
 import { addDays } from '../../domain/dayKey';
 import { closeByHand, missingOutcomes } from '../../domain/rollover';
 import type { CloseOutcome } from '../../domain/types';
+import type { Moment } from '../../domain/moments';
 import { now } from '../clock';
 import { getDb } from '../dbRef';
 import { newId } from '../ids';
+import { computeMomentsAfterClose } from '../moments';
 import { bump } from '../store';
 import { todayKey as resolveTodayKey } from '../today';
 import { reconcile } from './reconcile';
@@ -25,8 +27,10 @@ export class MissingOutcomesError extends ValidationError {
  * task with minutes left) to 'moved' | 'let_go'. A moved timed task carries its leftover minutes to tomorrow.
  * Reconciles first so a stale day is auto-closed and today exists. Throws ValidationError if today is already closed,
  * or MissingOutcomesError (a ValidationError with `.missing`) if any unfinished task lacks a choice.
+ * Returns the moments due at this close (ADR-015), in play order; [] when moments are turned off. Their markers are
+ * saved here. A failure computing them never undoes the close: it returns [].
  */
-export function closeToday(outcomes: Record<string, CloseOutcome>): void {
+export function closeToday(outcomes: Record<string, CloseOutcome>): Moment[] {
   reconcile();
   const db = getDb();
   const at = now();
@@ -48,4 +52,11 @@ export function closeToday(outcomes: Record<string, CloseOutcome>): void {
   );
   applyOps(db, ops, newId, at);
   bump('days', 'sessions');
+  try {
+    return computeMomentsAfterClose(todayKey, at);
+  } catch (e) {
+    // The day is closed already; a moments bug must not look like a failed close, but it must not hide either.
+    if (__DEV__) console.warn('closeToday: moments failed, playing none', e);
+    return [];
+  }
 }

@@ -111,3 +111,9 @@ gain `addBudgetSec`, which `applyOps` adds to `budgetSec` in the same transactio
 **Trade-off:** one more choice on the Close screen for every half-done timed task, and a budget that can grow past the
 planned minutes; in return nothing is lost when the user wants it kept, and nothing is ever carried or owed unless they
 say so.
+
+### ADR-015 · Moments at close (product decision, 2026-11-01)
+**Context:** the user chose six short celebratory "moments" to play when the day is closed by hand: longest task, day complete, personal best, 7-day streak, week complete, and a monthly goal. For the last one the user sets the goal in hours; with no goal set it falls back to a month in review on the month's last day.
+**Decision:** `momentsAtClose` (pure, `src/domain/moments.ts`) decides which are due and what each shows, in a fixed play order; `nextMarkers` returns the updated "already celebrated" markers. `closeToday` computes them after applying the close (only if `momentsEnabled`), saves the markers and returns `Moment[]`. Auto-close plays none and touches no markers. Everything derives from `days`, `day_tasks` and `sessions`; history totals for the personal best come from one grouped query. Streak and week reuse the app's rules (a day counts with >= 1 collection item; Monday-Sunday week).
+**Consequences:** new settings keys `monthlyGoalHours`, `momentsEnabled` and one `momentMarkers` object; no new tables and no migration. The screens that draw the moments come in chunk 20 and the Settings controls in chunk 21. Changing the goal or turning moments off never rewrites markers.
+**Trade-off:** markers are saved right after the close in a separate write (not the same transaction), so a crash in between could replay one moment later; in return the close itself stays untouched and cannot fail because of a celebration.
