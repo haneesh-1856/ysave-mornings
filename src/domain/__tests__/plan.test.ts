@@ -238,10 +238,27 @@ describe('buildPlan, confirmed plan', () => {
     expect(d.groups.map((g) => g.topicId)).toEqual(['A', 'X', 'Q']);
   });
 
-  it('clamps odd saved budgets', () => {
-    const d = build([], day(1), [dayTask('big', { budgetSec: 99999 * 60 }), dayTask('small', { budgetSec: 60 })]);
+  it('caps big saved budgets and keeps small or off-grid ones (carried time, ADR-014)', () => {
+    const d = build([], day(1), [
+      dayTask('big', { budgetSec: 99999 * 60 }), dayTask('small', { budgetSec: 60 }), dayTask('odd', { budgetSec: 13 * 60 }),
+    ]);
     expect(find(d, 'big').minutes).toBe(180);
-    expect(find(d, 'small').minutes).toBe(5);
+    expect(find(d, 'small').minutes).toBe(1);
+    expect(find(d, 'odd').minutes).toBe(13);
+  });
+
+  it('confirming a plan keeps a carried 2-minute row at 2 minutes', () => {
+    const p = dayTask('p', { taskId: 't', budgetSec: 2 * 60, forwardedFromDayKey: '2026-10-28' });
+    const out = confirmPlan(build([task('t', 'A', 0)], day(null), [p]), [p], []);
+    expect(out.update).toEqual([{ ...p, budgetSec: 2 * 60, sortOrder: 0 }]);
+  });
+
+  it('stepping an off-grid length snaps to the grid in that direction', () => {
+    const d = build([], day(1), [dayTask('odd', { budgetSec: 13 * 60 }), dayTask('tiny', { budgetSec: 2 * 60 })]);
+    expect(find(stepMinutes(d, 'odd', 5), 'odd').minutes).toBe(15);
+    expect(find(stepMinutes(d, 'odd', -5), 'odd').minutes).toBe(10);
+    expect(find(stepMinutes(d, 'tiny', 5), 'tiny').minutes).toBe(5);
+    expect(find(stepMinutes(d, 'tiny', -5), 'tiny').minutes).toBe(2);
   });
 });
 

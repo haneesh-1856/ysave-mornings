@@ -13,14 +13,19 @@ type Props = {
   value: CloseOutcome | null;
   /** Already-localised weekday of the next day, e.g. "Friday". */
   nextDayName: string;
+  /** Timed task only: whole minutes still left (rounded up). Moving carries exactly this time. */
+  leftoverMin?: number;
   onChange: (v: CloseOutcome) => void;
 };
 
-/** One unticked task at close: pick "Move to <day>" or "Let it go". Nothing is pre-selected. */
-export function OutcomePicker({ name, topicColor, value, nextDayName, onChange }: Props) {
+/**
+ * One unfinished task at close: pick "Move to <day>" ("Move N min to <day>" for a timed task) or
+ * "Let it go". Nothing is pre-selected.
+ */
+export function OutcomePicker({ name, topicColor, value, nextDayName, leftoverMin, onChange }: Props) {
   const t = useTheme();
   const options: { value: CloseOutcome; label: string }[] = [
-    { value: 'moved', label: `Move to ${nextDayName}` },
+    { value: 'moved', label: leftoverMin === undefined ? `Move to ${nextDayName}` : `Move ${leftoverMin} min to ${nextDayName}` },
     { value: 'let_go', label: 'Let it go' },
   ];
   return (
@@ -29,6 +34,7 @@ export function OutcomePicker({ name, topicColor, value, nextDayName, onChange }
         <View testID="outcome-dot" style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: t.topic(topicColor).color }} />
         <T weight="bold" style={{ flex: 1 }}>{name}</T>
       </View>
+      {leftoverMin !== undefined ? <T variant="sub">{`${leftoverMin} min left`}</T> : null}
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {options.map(o => {
           const on = o.value === value;

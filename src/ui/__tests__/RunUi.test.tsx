@@ -37,6 +37,13 @@ describe('TaskRow', () => {
     expect(screen.getByText(text)).toBeTruthy();
   });
 
+  it('carried time shows "from <day>" and "moved to <day>", and says so to screen readers (ADR-014)', async () => {
+    await renderThemed(row({ forwardedFrom: 'Friday', movedTo: 'Sunday' }));
+    expect(screen.getByText('from Friday')).toBeTruthy();
+    expect(screen.getByText('moved to Sunday')).toBeTruthy();
+    expect(screen.getByLabelText('Read, 45 minutes, from Friday, moved to Sunday')).toBeTruthy();
+  });
+
   it('shows the live dot only while running, the check when done, and the gold mark', async () => {
     const { rerender } = await renderThemed(row({ state: 'running' }));
     expect(screen.getByTestId('live-dot')).toBeTruthy();

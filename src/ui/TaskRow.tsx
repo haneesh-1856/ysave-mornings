@@ -18,6 +18,10 @@ type Props = {
   onPress: () => void;
   a11yLabel: string;
   disabled?: boolean;
+  /** Weekday the task (or its leftover time) was carried over from, already formatted (e.g. "Thursday"). */
+  forwardedFrom?: string;
+  /** Weekday a closed day's leftover time was moved to at close, already formatted (e.g. "Saturday"). */
+  movedTo?: string;
 };
 
 /** The right-hand text for each state (contract). */
@@ -32,20 +36,24 @@ export function taskRowText(p: Pick<Props, 'minutes' | 'state' | 'remainingMs' |
 }
 
 /** A timed task on Today. Tapping opens Run. A live dot marks the running task. */
-export function TaskRow({ name, topicColor, minutes, state, remainingMs, overtimeMs, gold, onPress, a11yLabel, disabled = false }: Props) {
+export function TaskRow({ name, topicColor, minutes, state, remainingMs, overtimeMs, gold, onPress, a11yLabel, disabled = false, forwardedFrom, movedTo }: Props) {
   const t = useTheme();
   const text = taskRowText({ minutes, state, remainingMs, overtimeMs });
+  const notes = [forwardedFrom ? `from ${forwardedFrom}` : null, movedTo ? `moved to ${movedTo}` : null].filter((x): x is string => x !== null);
   return (
     <Pressable
       testID="task-row"
       accessibilityRole="button"
-      accessibilityLabel={a11yLabel}
+      accessibilityLabel={notes.length ? `${a11yLabel}, ${notes.join(', ')}` : a11yLabel}
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={disabled ? undefined : onPress}
       style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }}>
       <View importantForAccessibility="no" style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: t.topic(topicColor).color }} />
-      <T numberOfLines={1} style={{ flex: 1 }} color={state === 'stopped' ? 'muted' : 'ink'}>{name}</T>
+      <View style={{ flex: 1 }}>
+        <T numberOfLines={1} color={state === 'stopped' ? 'muted' : 'ink'}>{name}</T>
+        {notes.map((n) => <T key={n} variant="sub">{n}</T>)}
+      </View>
       {state === 'running' ? (
         <View testID="live-dot" importantForAccessibility="no" style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: t.c.accent }} />
       ) : null}

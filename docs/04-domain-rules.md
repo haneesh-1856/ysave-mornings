@@ -90,7 +90,14 @@ States of a day task: `idle → running ⇄ paused → done(running overtime | s
 3. Set `closedAt = now`, `closedBy = user`.
 4. Each `moved` task becomes a pre-ticked row in the next day's plan (`forwardedFromDayKey` set). If
    the next day's plan is already confirmed, the row is added to it directly.
-- **Timed tasks are never forwarded.** A forwarded task counts as **not done** for the day it left.
+- **Unfinished timed tasks can be moved, only by choice (ADR-014).** At a by-hand close, a timed task that is not
+  completed and has minutes left gets the same Move / Let go choice as an unticked check. Nothing is carried
+  automatically. Moving carries the **leftover**: the remaining budget at the close instant, rounded **up** to whole
+  minutes (at least 1), capped at 180 min (`MINUTES.max`). A never-started task carries its whole budget; a completed
+  task is not offered. If the next day already has a row for the same task and it is timed, the leftover is added to
+  that row's `budgetSec` (total capped at 180 min) and it is marked forwarded; if that row is a checklist row it is only
+  marked forwarded. Otherwise a new timed row is added with `budgetSec` = leftover. Auto-close (rollover) gives timed
+  tasks no outcome and carries no time. A forwarded task counts as **not done** for the day it left.
 - After closing: Today is read-only, and the button becomes "Plan tomorrow".
 
 **Auto-close** (rollover): runs on app start and every foreground, for each past `days` row with

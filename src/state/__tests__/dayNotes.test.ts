@@ -13,7 +13,7 @@ import { reconcile } from '../actions/reconcile';
 import { setClockOverride } from '../clock';
 import { ValidationError } from '../errors';
 import { usePlanDraft } from '../hooks/usePlanDraft';
-import { setupState, teardownState } from '../testSupport';
+import { letGoAll, setupState, teardownState } from '../testSupport';
 
 jest.mock('../ids', () => {
   let n = 0;
@@ -134,7 +134,7 @@ describe('the day note travels when a task is moved', () => {
     reconcile();
     const d = stored(WED, 'Form');
     setDayTaskNote(d.id, 'bring the stamped copy');
-    closeToday({ [d.id]: 'moved' });
+    closeToday(letGoAll({ [d.id]: 'moved' }));
     expect(stored(THU, 'Form')).toMatchObject({ forwardedFromDayKey: WED, note: 'bring the stamped copy' });
     expect(getTask(db, form.id)!.note).toBe('');
   });
@@ -145,7 +145,7 @@ describe('the day note travels when a task is moved', () => {
     confirmDayPlan(THU, planSnapshot(THU));
     const d = stored(WED, 'Form');
     setDayTaskNote(d.id, 'from today');
-    closeToday({ [d.id]: 'moved' });
+    closeToday(letGoAll({ [d.id]: 'moved' }));
     expect(stored(THU, 'Form')).toMatchObject({ forwardedFromDayKey: WED, note: 'from today' });
   });
 
@@ -155,7 +155,7 @@ describe('the day note travels when a task is moved', () => {
     confirmDayPlan(THU, planSnapshot(THU, 'Form', 'mine for thursday'));
     const d = stored(WED, 'Form');
     setDayTaskNote(d.id, 'from today');
-    closeToday({ [d.id]: 'moved' });
+    closeToday(letGoAll({ [d.id]: 'moved' }));
     expect(stored(THU, 'Form')).toMatchObject({ forwardedFromDayKey: WED, note: 'mine for thursday' });
   });
 });
@@ -178,7 +178,7 @@ describe('setDayTaskNote', () => {
     const d = stored(WED, 'Read');
     expect(() => setDayTaskNote(d.id, 'x'.repeat(1001))).toThrow(ValidationError);
     expect(() => setDayTaskNote('nope', 'x')).toThrow(ValidationError);
-    closeToday({ [stored(WED, 'Form').id]: 'let_go' });
+    closeToday(letGoAll());
     expect(() => setDayTaskNote(d.id, 'too late')).toThrow(ValidationError);
     expect(stored(WED, 'Read').note).toBeNull();
   });

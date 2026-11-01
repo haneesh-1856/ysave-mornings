@@ -32,6 +32,26 @@ describe('OutcomePicker', () => {
     expect(screen.getByLabelText('Read: Move to Friday').props.accessibilityState.checked).toBe(false);
   });
 
+  it('a timed row shows the minutes left and "Move N min to <day>"', async () => {
+    const onChange = jest.fn();
+    await renderThemed(
+      <OutcomePicker name="Deep work" topicColor="study" value={null} nextDayName="Friday" leftoverMin={12} onChange={onChange} />,
+    );
+    screen.getByText('12 min left');
+    screen.getByText('Move 12 min to Friday');
+    await fireEvent.press(screen.getByLabelText('Deep work: Move 12 min to Friday'));
+    expect(onChange).toHaveBeenCalledWith('moved');
+    screen.getByText('Let it go');
+    expect(screen.queryByText('Move to Friday')).toBeNull();
+  });
+
+  it('a check row has no minutes line', async () => {
+    await renderThemed(
+      <OutcomePicker name="Read" topicColor="study" value={null} nextDayName="Friday" onChange={() => {}} />,
+    );
+    expect(screen.queryByText(/min left/)).toBeNull();
+  });
+
   it('keeps targets at least 44 pt tall and shows the topic dot', async () => {
     await renderThemed(
       <OutcomePicker name="Read" topicColor="study" value={null} nextDayName="Friday" onChange={() => {}} />,

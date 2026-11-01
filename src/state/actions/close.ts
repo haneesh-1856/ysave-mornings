@@ -21,9 +21,10 @@ export class MissingOutcomesError extends ValidationError {
 }
 
 /**
- * Closes today by hand (doc 04 section 6). `outcomes` maps each unticked checklist day-task id to 'moved' | 'let_go'.
+ * Closes today by hand (doc 04 section 6). `outcomes` maps each unfinished day-task id (an unticked check, or a timed
+ * task with minutes left) to 'moved' | 'let_go'. A moved timed task carries its leftover minutes to tomorrow.
  * Reconciles first so a stale day is auto-closed and today exists. Throws ValidationError if today is already closed,
- * or MissingOutcomesError (a ValidationError with `.missing`) if any unticked check lacks a choice.
+ * or MissingOutcomesError (a ValidationError with `.missing`) if any unfinished task lacks a choice.
  */
 export function closeToday(outcomes: Record<string, CloseOutcome>): void {
   reconcile();
@@ -34,7 +35,7 @@ export function closeToday(outcomes: Record<string, CloseOutcome>): void {
   const bundle = loadDayBundle(db, todayKey);
   if (!bundle) throw new ValidationError('day', 'Nothing to close yet');
   if (bundle.day.closedAt !== null) throw new ValidationError('day', 'Today is already closed');
-  const missing = missingOutcomes(bundle, outcomes);
+  const missing = missingOutcomes(bundle, outcomes, at);
   if (missing.length > 0) throw new MissingOutcomesError(missing);
 
   const tomorrowKey = addDays(todayKey, 1);

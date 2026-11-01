@@ -39,23 +39,38 @@ const mk = (sessions: Session[] = [], dayOver: Partial<Day> = {}): DayBundle =>
 const NEXT = { day: null, dayTasks: [] as DayTask[], dayStartHour: 4 };
 
 describe('missingOutcomes', () => {
-  it('lists unticked checks without a choice, in sortOrder; ignores timed and done', () => {
+  const t0 = at(10, 28, 22);
+  it('lists unticked checks and unfinished timed tasks without a choice, in sortOrder; ignores done', () => {
     const b = mk();
-    expect(missingOutcomes(b, {})).toEqual(['c2', 'c1']);
-    expect(missingOutcomes(b, { c2: 'moved' })).toEqual(['c1']);
-    expect(missingOutcomes(b, { c1: 'let_go', c2: 'moved' })).toEqual([]);
+    expect(missingOutcomes(b, {}, t0)).toEqual(['c2', 'c1', 'tm']);
+    expect(missingOutcomes(b, { c2: 'moved' }, t0)).toEqual(['c1', 'tm']);
+    expect(missingOutcomes(b, { c1: 'let_go', c2: 'moved', tm: 'let_go' }, t0)).toEqual([]);
+  });
+
+  it('does not list a timed task that is completed or has used its whole budget', () => {
+    const done = bundle(dayRow(D), [dt('tm', D, { kind: 'timed', budgetSec: 600, completedAt: 5 })]);
+    expect(missingOutcomes(done, {}, t0)).toEqual([]);
+    const used = bundle(dayRow(D), [dt('tm', D, { kind: 'timed', budgetSec: 600 })], [sess('s1', 'tm', t0 - 12 * MIN, t0 - MIN)]);
+    expect(missingOutcomes(used, {}, t0)).toEqual([]);
+  });
+
+  it('counts an open session up to now when deciding if time is left', () => {
+    const b = bundle(dayRow(D), [dt('tm', D, { kind: 'timed', budgetSec: 600 })], [sess('s1', 'tm', t0 - 9 * MIN, null)]);
+    expect(missingOutcomes(b, {}, t0)).toEqual(['tm']);
+    expect(missingOutcomes(b, {}, t0 + 2 * MIN)).toEqual([]);
   });
 });
 
 describe('closeByHand', () => {
   const now = at(10, 28, 22);
-  const both: Record<string, CloseOutcome> = { c1: 'moved', c2: 'let_go' };
+  const both: Record<string, CloseOutcome> = { c1: 'moved', c2: 'let_go', tm: 'let_go' };
 
   it('records outcomes, closes the day by user, forwards moved tasks into a new next day', () => {
     const ops = closeByHand(mk(), both, NEXT, now);
     expect(ops.outcomes).toEqual([
       { dayTaskId: 'c2', closeOutcome: 'let_go' },
       { dayTaskId: 'c1', closeOutcome: 'moved' },
+      { dayTaskId: 'tm', closeOutcome: 'let_go' },
     ]);
     expect(ops.closeDays).toEqual([{ dayKey: D, closedAt: now, closedBy: 'user' }]);
     expect(ops.createDays).toEqual([
@@ -77,7 +92,7 @@ describe('closeByHand', () => {
 
   it('does not create a next day that exists; appends after its rows', () => {
     const next = { day: dayRow('2026-10-29'), dayTasks: [dt('n1', '2026-10-29', { taskId: 'x', sortOrder: 4 })], dayStartHour: 4 };
-    const ops = closeByHand(mk(), { c1: 'moved', c2: 'moved' }, next, now);
+    const ops = closeByHand(mk(), { c1: 'moved', c2: 'moved', tm: 'let_go' }, next, now);
     expect(ops.createDays).toEqual([]);
     expect(ops.insertDayTasks.map((d) => d.sortOrder)).toEqual([5, 6]);
     expect(ops.insertDayTasks.map((d) => d.taskId)).toEqual(['t2', 't1']);
@@ -117,12 +132,96 @@ describe('closeByHand', () => {
     expect(ops.completions).toEqual([{ dayTaskId: 'tm', completedAt: now - 5000 }]);
   });
 
-  it('leaves already-ended sessions alone and never forwards timed tasks', () => {
+  it('leaves already-ended sessions alone; a let_go timed task forwards nothing', () => {
     const b = mk([sess('s1', 'tm', now - 20 * MIN, now - 15 * MIN)]);
     const ops = closeByHand(b, both, NEXT, now);
     expect(ops.closeSessions).toEqual([]);
     expect(ops.completions).toEqual([]);
     expect(ops.insertDayTasks.every((d) => d.kind === 'check')).toBe(true);
+    expect(ops.forwardDayTasks).toEqual([]);
+  });
+
+  it('a completed timed task (incl. completed at close) needs no outcome and carries nothing', () => {
+    const b = mk([sess('s1', 'tm', now - 10 * MIN - 5000, null)]);
+    const ops = closeByHand(b, { c1: 'let_go', c2: 'let_go' }, NEXT, now);
+    expect(ops.outcomes.map((o) => o.dayTaskId)).toEqual(['c2', 'c1']);
+    expect(ops.insertDayTasks).toEqual([]);
+  });
+
+  it('throws when an unfinished timed task has no outcome', () => {
+    expect(() => closeByHand(mk(), { c1: 'let_go', c2: 'let_go' }, NEXT, now)).toThrow(/tm/);
+  });
+
+  describe('moving a timed task', () => {
+    const timedDay = (sessions: Session[] = [], over: Partial<DayTask> = {}): DayBundle =>
+      bundle(dayRow(D), [dt('tm', D, { kind: 'timed', budgetSec: 1800, taskId: 'tt', cue: 'q', treat: 'r', note: 'n', topicId: 'H', colorKey: 'health', ...over })], sessions);
+
+    it('partly used budget: inserts a next-day row with the leftover rounded up to whole minutes', () => {
+      // 30 min budget, 17 min 30 s focused -> 12 min 30 s left -> 13 min
+      const b = timedDay([sess('s1', 'tm', now - 40 * MIN, now - 40 * MIN + 17 * MIN + 30_000)]);
+      const ops = closeByHand(b, { tm: 'moved' }, NEXT, now);
+      expect(ops.outcomes).toEqual([{ dayTaskId: 'tm', closeOutcome: 'moved' }]);
+      expect(ops.insertDayTasks).toEqual([{
+        dayKey: '2026-10-29', taskId: 'tt', topicId: 'H', name: 'tm', colorKey: 'health', kind: 'timed',
+        budgetSec: 13 * 60, cue: 'q', treat: 'r', note: 'n', forwardedFromDayKey: D, completedAt: null, closeOutcome: null,
+        sortOrder: 0,
+      }]);
+    });
+
+    it('counts a running session up to the close instant', () => {
+      const b = timedDay([sess('s1', 'tm', now - 20 * MIN, null)]);
+      const ops = closeByHand(b, { tm: 'moved' }, NEXT, now);
+      expect(ops.closeSessions).toEqual([{ id: 's1', endedAt: now }]);
+      expect(ops.insertDayTasks[0].budgetSec).toBe(10 * 60);
+    });
+
+    it('a never-started timed task carries its whole budget', () => {
+      const ops = closeByHand(timedDay(), { tm: 'moved' }, NEXT, now);
+      expect(ops.insertDayTasks[0]).toMatchObject({ kind: 'timed', budgetSec: 1800, forwardedFromDayKey: D });
+    });
+
+    it('under a minute left still carries 1 minute', () => {
+      const b = timedDay([sess('s1', 'tm', now - 40 * MIN, now - 40 * MIN + 29 * MIN + 40_000)]);
+      const ops = closeByHand(b, { tm: 'moved' }, NEXT, now);
+      expect(ops.insertDayTasks[0].budgetSec).toBe(60);
+    });
+
+    it('caps a new row at the plan maximum', () => {
+      const ops = closeByHand(timedDay([], { budgetSec: 200 * 60 }), { tm: 'moved' }, NEXT, now);
+      expect(ops.insertDayTasks[0].budgetSec).toBe(180 * 60);
+    });
+
+    it('adds the leftover to an existing next-day timed row and marks it forwarded', () => {
+      const next = { day: dayRow('2026-10-29'), dayTasks: [dt('n1', '2026-10-29', { taskId: 'tt', kind: 'timed', budgetSec: 900 })], dayStartHour: 4 };
+      const b = timedDay([sess('s1', 'tm', now - 40 * MIN, now - 40 * MIN + 17 * MIN + 30_000)]);
+      const ops = closeByHand(b, { tm: 'moved' }, next, now);
+      expect(ops.insertDayTasks).toEqual([]);
+      expect(ops.forwardDayTasks).toEqual([{ dayTaskId: 'n1', forwardedFromDayKey: D, note: 'n', addBudgetSec: 13 * 60 }]);
+    });
+
+    it('caps the added time so the existing row stays within the plan maximum', () => {
+      const next = { day: dayRow('2026-10-29'), dayTasks: [dt('n1', '2026-10-29', { taskId: 'tt', kind: 'timed', budgetSec: 170 * 60 })], dayStartHour: 4 };
+      const ops = closeByHand(timedDay(), { tm: 'moved' }, next, now);
+      expect(ops.forwardDayTasks[0].addBudgetSec).toBe(10 * 60);
+    });
+
+    it('an existing next-day check row for the same task is only marked forwarded', () => {
+      const next = { day: dayRow('2026-10-29'), dayTasks: [dt('n1', '2026-10-29', { taskId: 'tt', kind: 'check' })], dayStartHour: 4 };
+      const ops = closeByHand(timedDay(), { tm: 'moved' }, next, now);
+      expect(ops.forwardDayTasks).toEqual([{ dayTaskId: 'n1', forwardedFromDayKey: D, note: 'n' }]);
+      expect(ops.forwardDayTasks[0]).not.toHaveProperty('addBudgetSec');
+    });
+
+    it('an already-forwarded next-day timed row is left alone', () => {
+      const next = {
+        day: dayRow('2026-10-29'),
+        dayTasks: [dt('n1', '2026-10-29', { taskId: 'tt', kind: 'timed', budgetSec: 900, forwardedFromDayKey: '2026-10-27' })],
+        dayStartHour: 4,
+      };
+      const ops = closeByHand(timedDay(), { tm: 'moved' }, next, now);
+      expect(ops.forwardDayTasks).toEqual([]);
+      expect(ops.insertDayTasks).toEqual([]);
+    });
   });
 
   it('throws when outcomes are missing', () => {
@@ -135,7 +234,7 @@ describe('closeByHand', () => {
 
   it('ignores outcomes for ticked or unknown tasks', () => {
     const ops = closeByHand(mk(), { ...both, c3: 'moved', zz: 'moved' }, NEXT, now);
-    expect(ops.outcomes).toHaveLength(2);
+    expect(ops.outcomes).toHaveLength(3);
   });
 });
 
@@ -166,6 +265,15 @@ describe('rollover: auto-close', () => {
     ]);
     // The 10 min budget was reached at 23:10: completion is that instant, not the end or now.
     expect(r.completions).toEqual([{ dayTaskId: 'tm', completedAt: at(10, 28, 23) + 10 * MIN }]);
+  });
+
+  it('gives an unfinished timed task no outcome and carries no time', () => {
+    // 5 of 10 minutes used when the day ends: time is left, yet auto-close records nothing for it.
+    const b = mk([sess('s1', 'tm', at(10, 29, 3, 55), null)]);
+    const r = rollover(input({ openDays: [b] }));
+    expect(r.outcomes.map((o) => o.dayTaskId)).toEqual(['c2', 'c1']);
+    expect(r.insertDayTasks).toEqual([]);
+    expect(r.forwardDayTasks).toEqual([]);
   });
 
   it('a task that hit 0 while the phone was locked completes at that instant; time never leaks into today', () => {

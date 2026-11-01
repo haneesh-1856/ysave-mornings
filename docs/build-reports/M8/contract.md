@@ -228,3 +228,12 @@ Rule:
 - Tomorrow confirmed (`planConfirmedAt` set): only the "Tomorrow is planned · N tasks" card (See / Edit; the task list once today is closed). No "Plan tomorrow" button.
 - Otherwise (nothing confirmed, a draft alone included): only the primary "Plan tomorrow" button (testID `today-plan-tomorrow`). No card.
 - Unchanged: Edit by the title, Plan today, closed card, Close, folds, Dock, Collection. Close's own "Plan tomorrow" is a different screen and stays.
+
+## Chunk 18 · Close: opt-in carry-forward of unfinished time (user 2026-11-01)
+User: unfinished timed tasks should get the same "Move to <day>" / "Let it go" choice at Close as unticked checks.
+Rule (doc 04 section 6, ADR-014):
+- By-hand close only. Offered: unticked checks, plus timed tasks not completed with minutes left at the close instant (never started = whole budget). Nothing pre-selected; missing choices block the close (error: "Choose Move or Let go for N tasks").
+- Moved timed task carries leftover = remaining budget at close, rounded up to whole minutes, min 1, capped at 180 (`MINUTES.max`). Plan has no other step rule (step 5 is only the stepper).
+- Next day has a row for the same non-null taskId: timed row gets `budgetSec += leftover` (total capped at 180 min) and is marked forwarded (note fills only an empty note); a check row is only marked forwarded; an already-forwarded row is left alone. Otherwise a new timed row with `budgetSec` = leftover, `forwardedFromDayKey` = today, cue/treat/note copied.
+- Auto-close unchanged: timed tasks get no outcome, nothing is carried.
+- UI: card "Not finished today"; timed row shows "N min left" and "Move N min to <day>".

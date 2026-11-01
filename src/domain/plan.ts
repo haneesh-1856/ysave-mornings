@@ -51,9 +51,12 @@ interface Entry {
   order: number;
 }
 
-/** Per-day minutes of a day row: budgetSec/60 (clamped); check rows (budgetSec 0) use the task's minutes, else 15. */
+/**
+ * Per-day minutes of a day row: budgetSec/60, kept as is (1..MINUTES.max) because time carried from a closed day
+ * (ADR-014) can be any whole minute, e.g. 2 or 13; check rows (budgetSec 0) use the task's minutes, else 15.
+ */
 function dayMinutes(d: DayTask, lib: Task | undefined): number {
-  return d.budgetSec > 0 ? clampMinutes(Math.round(d.budgetSec / 60)) : (lib?.minutes ?? FALLBACK_MINUTES);
+  return d.budgetSec > 0 ? Math.min(MINUTES.max, Math.max(1, Math.round(d.budgetSec / 60))) : (lib?.minutes ?? FALLBACK_MINUTES);
 }
 
 function libraryRow(t: Task, topic: Topic, reason: PlanReason, ticked: boolean): PlanRow {
@@ -218,8 +221,13 @@ export function setTicked(d: PlanDraft, key: string, ticked: boolean): PlanDraft
   return mapRow(d, key, (r) => ({ ...r, ticked }));
 }
 
+/** An off-grid length (carried time, e.g. 13) snaps to the grid in the step's direction (15 or 10); below the minimum it only grows. */
 export function stepMinutes(d: PlanDraft, key: string, delta: 5 | -5): PlanDraft {
-  return mapRow(d, key, (r) => ({ ...r, minutes: clampMinutes(r.minutes + delta) }));
+  return mapRow(d, key, (r) => {
+    if (r.minutes % MINUTES.step === 0) return { ...r, minutes: clampMinutes(r.minutes + delta) };
+    const snapped = (delta > 0 ? Math.ceil : Math.floor)(r.minutes / MINUTES.step) * MINUTES.step;
+    return { ...r, minutes: snapped < MINUTES.min ? r.minutes : clampMinutes(snapped) };
+  });
 }
 
 export function setCue(d: PlanDraft, key: string, cue: string | null): PlanDraft {

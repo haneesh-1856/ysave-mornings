@@ -84,8 +84,11 @@ function TimedRowAt({ row, at, onOpen }: TimedProps) {
   const left = remainingMs(dayTask.budgetSec, sessions, at);
   const over = overtimeMs(dayTask.budgetSec, sessions, at);
   const gold = isGold(dayTask.budgetSec, sessions, at);
+  const from = dayTask.forwardedFromDayKey;
   return (
     <TaskRow
+      forwardedFrom={from ? weekdayName(from) : undefined}
+      movedTo={dayTask.closeOutcome === 'moved' ? weekdayName(addDays(dayTask.dayKey, 1)) : undefined}
       name={dayTask.name}
       topicColor={dayTask.colorKey}
       minutes={minutes}

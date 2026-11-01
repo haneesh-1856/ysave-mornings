@@ -51,7 +51,7 @@ describe('closeToday', () => {
   it('writes outcomes, closes the day by user, and forwards moved rows into a new tomorrow', () => {
     const id = seed();
     t = T0 + 10 * MIN;
-    closeToday({ [id.C1]: 'moved', [id.C2]: 'let_go' });
+    closeToday({ [id.A]: 'let_go', [id.C1]: 'moved', [id.C2]: 'let_go' });
     const b = loadDayBundle(db, TODAY)!;
     expect(b.day.closedAt).toBe(t);
     expect(b.day.closedBy).toBe('user');
@@ -71,7 +71,7 @@ describe('closeToday', () => {
     );
     const before = loadDayBundle(db, TOMORROW)!;
     const c1Before = before.dayTasks.filter((d) => d.name === 'C1').length;
-    closeToday({ [id.C1]: 'moved', [id.C2]: 'moved' });
+    closeToday({ [id.A]: 'let_go', [id.C1]: 'moved', [id.C2]: 'moved' });
     const after = loadDayBundle(db, TOMORROW)!;
     expect(after.dayTasks.filter((d) => d.name === 'C1')).toHaveLength(c1Before);
     expect(after.day.planConfirmedAt).toBe(before.day.planConfirmedAt);
@@ -87,16 +87,16 @@ describe('closeToday', () => {
     }
     expect(err).toBeInstanceOf(ValidationError);
     expect(err).toBeInstanceOf(MissingOutcomesError);
-    expect((err as Error).message).toBe('Choose Move or Let go for 2 tasks');
-    expect([...(err as MissingOutcomesError).missing].sort()).toEqual([id.C1, id.C2].sort());
-    expect(() => closeToday({ [id.C1]: 'let_go' })).toThrow('Choose Move or Let go for 1 task');
+    expect((err as Error).message).toBe('Choose Move or Let go for 3 tasks');
+    expect([...(err as MissingOutcomesError).missing].sort()).toEqual([id.A, id.C1, id.C2].sort());
+    expect(() => closeToday({ [id.C1]: 'let_go', [id.A]: 'let_go' })).toThrow('Choose Move or Let go for 1 task');
     expect(loadDayBundle(db, TODAY)!.day.closedAt).toBeNull();
     expect(listDays(db, TOMORROW, TOMORROW)).toHaveLength(0);
   });
 
   it('keeps a prefilled (unconfirmed) today final after closing: a later reconcile adds no rows', () => {
     const id = seed();
-    closeToday({ [id.C1]: 'let_go', [id.C2]: 'let_go' });
+    closeToday({ [id.A]: 'let_go', [id.C1]: 'let_go', [id.C2]: 'let_go' });
     const before = loadDayBundle(db, TODAY)!;
     expect(before.day.planConfirmedAt).toBeNull();
     const study = listTopics(db)[0];
@@ -108,8 +108,41 @@ describe('closeToday', () => {
 
   it('rejects closing twice', () => {
     const id = seed();
-    closeToday({ [id.C1]: 'let_go', [id.C2]: 'let_go' });
+    closeToday({ [id.A]: 'let_go', [id.C1]: 'let_go', [id.C2]: 'let_go' });
     expect(() => closeToday({})).toThrow('Today is already closed');
+  });
+
+  it('moves the leftover of a partly used timed task into a new tomorrow row', () => {
+    const id = seed();
+    startTask(id.A); // 30 min budget
+    t = T0 + 17 * MIN + 30_000; // 12 min 30 s left -> 13
+    closeToday({ [id.A]: 'moved', [id.C1]: 'let_go', [id.C2]: 'let_go' });
+    expect(loadDayBundle(db, TODAY)!.dayTasks.find((d) => d.id === id.A)!.closeOutcome).toBe('moved');
+    const tm = loadDayBundle(db, TOMORROW)!;
+    expect(tm.dayTasks).toHaveLength(1);
+    expect(tm.dayTasks[0]).toMatchObject({ name: 'A', kind: 'timed', budgetSec: 13 * 60, forwardedFromDayKey: TODAY });
+  });
+
+  it('carries the whole budget of a never-started timed task and adds to a planned tomorrow row', () => {
+    const id = seed();
+    confirmDayPlan(
+      TOMORROW,
+      buildPlan({ dayKey: TOMORROW, topics: listTopics(db), tasks: listTasks(db), day: null, dayTasks: [] }),
+    );
+    const before = loadDayBundle(db, TOMORROW)!.dayTasks.find((d) => d.name === 'A')!;
+    closeToday({ [id.A]: 'moved', [id.C1]: 'let_go', [id.C2]: 'let_go' });
+    const after = loadDayBundle(db, TOMORROW)!.dayTasks.filter((d) => d.name === 'A');
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ id: before.id, budgetSec: before.budgetSec + 30 * 60, forwardedFromDayKey: TODAY });
+  });
+
+  it('does not offer or require an outcome for a timed task finished by close time', () => {
+    const id = seed();
+    startTask(id.A);
+    t = T0 + 31 * MIN;
+    closeToday({ [id.C1]: 'let_go', [id.C2]: 'let_go' });
+    expect(loadDayBundle(db, TODAY)!.dayTasks.find((d) => d.id === id.A)).toMatchObject({ closeOutcome: null });
+    expect(loadDayBundle(db, TOMORROW)!.dayTasks).toEqual([]);
   });
 
   it('ends a running session at now', () => {
@@ -117,14 +150,24 @@ describe('closeToday', () => {
     startTask(id.A);
     t = T0 + 7 * MIN;
     toggleCheckTask(id.C1);
-    closeToday({ [id.C2]: 'let_go' });
+    closeToday({ [id.A]: 'let_go', [id.C2]: 'let_go' });
     expect(getOpenSession(db)).toBeNull();
     expect(loadDayBundle(db, TODAY)!.sessionsByDayTask[id.A][0].endedAt).toBe(t);
   });
 });
 
 describe('useCloseSummary', () => {
-  it('reports unticked rows, counts, focus and extra time', async () => {
+  it('lists a timed task with its rounded-up minutes left, checks without', async () => {
+    const id = seed();
+    startTask(id.A);
+    t = T0 + 10 * MIN + 1000; // 19 min 59 s left -> 20
+    const { result } = await renderHook(() => useCloseSummary());
+    const a = result.current.unfinished.find((u) => u.dayTaskId === id.A)!;
+    expect(a.leftoverMin).toBe(20);
+    expect(result.current.unfinished.find((u) => u.dayTaskId === id.C1)).not.toHaveProperty('leftoverMin');
+  });
+
+  it('reports unfinished rows, counts, focus and extra time', async () => {
     const id = seed();
     startTask(id.A); // 30 min budget
     t = T0 + 40 * MIN; // 10 min over
@@ -134,8 +177,8 @@ describe('useCloseSummary', () => {
     expect(s.todayKey).toBe(TODAY);
     expect(s.tomorrowKey).toBe(TOMORROW);
     expect(s.closed).toBe(false);
-    expect(s.unticked.map((u) => u.name)).toEqual(['C2']);
-    expect(s.unticked[0]).toMatchObject({ dayTaskId: id.C2, topicName: 'Study', colorKey: 'study' });
+    expect(s.unfinished.map((u) => u.name)).toEqual(['C2']);
+    expect(s.unfinished[0]).toMatchObject({ dayTaskId: id.C2, topicName: 'Study', colorKey: 'study' });
     expect(s.total).toBe(3);
     expect(s.done).toBe(2); // A completed at its budget + C1
     expect(s.focusedMs).toBe(40 * MIN);
@@ -147,11 +190,11 @@ describe('useCloseSummary', () => {
     seed();
     removeTopic(listTopics(db)[0].id);
     const { result } = await renderHook(() => useCloseSummary());
-    for (const u of result.current.unticked) expect(u.topicName).toBe('Removed topic');
+    for (const u of result.current.unfinished) expect(u.topicName).toBe('Removed topic');
     teardownState();
     setupState(T0);
     const empty = await renderHook(() => useCloseSummary());
-    expect(empty.result.current).toMatchObject({ day: null, closed: false, total: 0, unticked: [] });
+    expect(empty.result.current).toMatchObject({ day: null, closed: false, total: 0, unfinished: [] });
   });
 });
 

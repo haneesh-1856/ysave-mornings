@@ -97,3 +97,17 @@ deletes everything as before; Cancel changes nothing. `removeTopic(id, { moves: 
 and not the topic, every taskId a live task of the topic, no duplicates); tasks not listed are deleted. Day rows stay snapshots.
 **Trade-off:** one more step on a destructive action and a longer confirm; in return nothing is lost by accident and no
 second screen or undo is needed. A topic with no tasks keeps the plain confirm.
+
+### ADR-014 · Opt-in carry-forward of unfinished time (product decision, 2026-11-01)
+**Context:** the user asked for it: a timed task left half done at the end of the day should be movable to tomorrow with
+its remaining minutes, like an unticked checklist task. Until now timed tasks were never forwarded, and the spec listed
+"carrying unfinished time forward" as a non-goal because it can read as pressure or debt.
+**Decision:** at a by-hand close only, each unfinished timed task (not completed, minutes left) gets the Move / Let it go
+choice, with nothing pre-selected. Moving carries the leftover at the close instant, rounded up to whole minutes (min 1,
+max 180 = `MINUTES.max`), as a new next-day timed row or added to the next day's existing timed row for the same task
+(marked "from <day>"). Auto-close never carries time and records no outcome for timed tasks. `Ops.forwardDayTasks` entries
+gain `addBudgetSec`, which `applyOps` adds to `budgetSec` in the same transaction. The non-goal is reworded to
+"automatically carrying unfinished time forward".
+**Trade-off:** one more choice on the Close screen for every half-done timed task, and a budget that can grow past the
+planned minutes; in return nothing is lost when the user wants it kept, and nothing is ever carried or owed unless they
+say so.

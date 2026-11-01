@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { Ops } from '../../domain/rollover';
 import type { Epoch } from '../../domain/types';
 import { days, dayTasks, sessions } from '../schema';
@@ -31,7 +31,12 @@ export function applyOps(db: DB, ops: Ops, newId: () => string, now: Epoch): voi
     }
     for (const f of ops.forwardDayTasks) {
       tx.update(dayTasks)
-        .set({ forwardedFromDayKey: f.forwardedFromDayKey, ...(f.note !== undefined ? { note: f.note } : {}), updatedAt: now })
+        .set({
+          forwardedFromDayKey: f.forwardedFromDayKey,
+          ...(f.note !== undefined ? { note: f.note } : {}),
+          ...(f.addBudgetSec ? { budgetSec: sql`${dayTasks.budgetSec} + ${f.addBudgetSec}` } : {}),
+          updatedAt: now,
+        })
         .where(eq(dayTasks.id, f.dayTaskId))
         .run();
     }

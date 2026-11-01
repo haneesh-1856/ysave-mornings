@@ -96,6 +96,7 @@ describe('applyOps', () => {
     const outcomes: Record<string, CloseOutcome> = {};
     outcomes[read.id] = 'moved';
     outcomes[stretch.id] = 'let_go';
+    for (const t of b.dayTasks) if (t.kind === 'timed') outcomes[t.id] = 'let_go';
     const now = dayStartOf(D28, H) + 5 * 3_600_000;
     const ops = closeByHand(b, outcomes, { day: null, dayTasks: [], dayStartHour: H }, now);
     applyOps(db, ops, newId, now + 1);
@@ -114,6 +115,29 @@ describe('applyOps', () => {
     // updatedAt was stamped with the call's now
     const row = db.select().from(days).all().find((d) => d.dayKey === D28)!;
     expect(row.updatedAt).toBe(now + 1);
+  });
+
+  it('adds budget to a forwarded next-day row and inserts a moved timed row, in one transaction', () => {
+    const { db, newId } = setup();
+    plan(db, D28, dayStartOf(D28, H), newId);
+    plan(db, TODAY, dayStartOf(TODAY, H), newId);
+    const b = loadDayBundle(db, D28)!;
+    const timed = b.dayTasks.find((t) => t.kind === 'timed')!; // DSA, 60 min
+    const nextBefore = loadDayBundle(db, TODAY)!;
+    const nextTimed = nextBefore.dayTasks.find((t) => t.taskId === timed.taskId)!;
+    const now = dayStartOf(D28, H) + 5 * 3_600_000;
+    const outcomes: Record<string, CloseOutcome> = {};
+    for (const t of b.dayTasks) outcomes[t.id] = 'let_go';
+    outcomes[timed.id] = 'moved';
+    const ops = closeByHand(b, outcomes, { day: nextBefore.day, dayTasks: nextBefore.dayTasks, dayStartHour: H }, now);
+    expect(ops.forwardDayTasks).toEqual([{ dayTaskId: nextTimed.id, forwardedFromDayKey: D28, addBudgetSec: 3600 }]);
+    applyOps(db, ops, newId, now + 1);
+
+    const next = loadDayBundle(db, TODAY)!;
+    const row = next.dayTasks.find((t) => t.id === nextTimed.id)!;
+    expect(row).toMatchObject({ kind: 'timed', budgetSec: nextTimed.budgetSec + 3600, forwardedFromDayKey: D28 });
+    expect(next.dayTasks).toHaveLength(nextBefore.dayTasks.length);
+    expect(loadDayBundle(db, D28)!.dayTasks.find((t) => t.id === timed.id)!.closeOutcome).toBe('moved');
   });
 
   it('rolls back everything when any op fails mid-way', () => {

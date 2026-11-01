@@ -1,6 +1,7 @@
 import { addDays, dayEndOf } from './dayKey';
 import { prefillUnplanned } from './plan';
-import { pendingCompletions } from './timer';
+import { minutesLeftLabel, pendingCompletions, remainingMs } from './timer';
+import { MINUTES } from './types';
 import type {
   ClosedBy, CloseOutcome, Day, DayBundle, DayKey, DayTask, DayTaskDraft, Epoch, Session, Task, Topic,
 } from './types';
@@ -16,7 +17,8 @@ export interface Ops {
   insertDayTasks: DayTaskDraft[];
   /** Existing next-day rows that a moved task landed on: they become "from <day>" rows (no duplicate). */
   /** `note` is set only when the moved row's note should fill an empty note on the existing next-day row. */
-  forwardDayTasks: { dayTaskId: string; forwardedFromDayKey: DayKey; note?: string }[];
+  /** `addBudgetSec` (timed rows only) is added to the existing row's budgetSec in the same write. */
+  forwardDayTasks: { dayTaskId: string; forwardedFromDayKey: DayKey; note?: string; addBudgetSec?: number }[];
 }
 
 const emptyOps = (): Ops => ({
@@ -30,11 +32,38 @@ function untickedChecks(b: DayBundle): DayTask[] {
   return b.dayTasks.filter((t) => t.kind === 'check' && t.completedAt === null).sort(bySortOrder);
 }
 
-/** Ids of unticked check tasks that still lack a choice in `outcomes`, in sortOrder. */
-export function missingOutcomes(b: DayBundle, outcomes: Record<string, CloseOutcome>): string[] {
-  return untickedChecks(b)
-    .filter((t) => outcomes[t.id] === undefined)
-    .map((t) => t.id);
+/**
+ * Whole minutes (rounded up, at least 1) of budget a timed task still has at `at`, or 0 when it has none
+ * or is already completed. Sessions still open count up to `at`.
+ */
+export function leftoverMinutes(t: DayTask, sessions: Session[], at: Epoch): number {
+  if (t.kind !== 'timed' || t.completedAt !== null) return 0;
+  const left = remainingMs(t.budgetSec, sessions, at);
+  return left > 0 ? Math.max(1, minutesLeftLabel(left)) : 0;
+}
+
+/**
+ * Unfinished tasks offered a Move / Let go choice at close, in sortOrder: unticked checks plus timed tasks
+ * with minutes left at `at` (never started = whole budget). `leftoverMin` is set for timed ones only.
+ */
+export function unfinishedTasks(b: DayBundle, at: Epoch): { task: DayTask; leftoverMin?: number }[] {
+  const out: { task: DayTask; leftoverMin?: number }[] = [];
+  for (const t of [...b.dayTasks].sort(bySortOrder)) {
+    if (t.kind === 'check') {
+      if (t.completedAt === null) out.push({ task: t });
+    } else {
+      const leftoverMin = leftoverMinutes(t, b.sessionsByDayTask[t.id] ?? [], at);
+      if (leftoverMin > 0) out.push({ task: t, leftoverMin });
+    }
+  }
+  return out;
+}
+
+/** Ids of unfinished tasks (unticked checks, timed with time left at `at`) that still lack a choice, in sortOrder. */
+export function missingOutcomes(b: DayBundle, outcomes: Record<string, CloseOutcome>, at: Epoch): string[] {
+  return unfinishedTasks(b, at)
+    .filter((u) => outcomes[u.task.id] === undefined)
+    .map((u) => u.task.id);
 }
 
 /** Open sessions of a bundle, plus a session map where each open one is closed at `at`. */
@@ -55,14 +84,17 @@ function closeOpenSessions(
 }
 
 /**
- * Closes a day by hand (doc 04 §6). THROWS if the day is already closed or any unticked check task has
- * no outcome; the Close screen prevents both (it asks for the missing choices and hides the button on a
- * closed day), so a throw means a UI bug.
+ * Closes a day by hand (doc 04 §6). THROWS if the day is already closed or any unfinished task (unticked
+ * check, or timed task with minutes left at `now`) has no outcome; the Close screen prevents both (it asks
+ * for the missing choices and hides the button on a closed day), so a throw means a UI bug.
  *
  * `next` = the next day's state: its `days` row (or null), its existing rows (for the unique
  * (dayKey, taskId) index and sortOrder), and the dayStartHour a new next-day row would snapshot.
  * A moved task whose non-null taskId already has a row in the next day (a draft, a plan, a repeat) is not
- * inserted again: that row is marked forwarded instead (forwardDayTasks), so it still arrives "from <day>". Timed tasks are never forwarded.
+ * inserted again: that row is marked forwarded instead (forwardDayTasks), so it still arrives "from <day>".
+ * A moved timed task carries its leftover minutes (rounded up, >= 1, capped at MINUTES.max): a new row gets
+ * budgetSec = leftover; an existing timed row gets it added (forwardDayTasks.addBudgetSec, total capped at
+ * MINUTES.max). Auto-close (rollover) never carries time.
  */
 export function closeByHand(
   b: DayBundle,
@@ -71,7 +103,7 @@ export function closeByHand(
   now: Epoch,
 ): Ops {
   if (b.day.closedAt !== null) throw new Error(`Day ${b.day.dayKey} is already closed`);
-  const missing = missingOutcomes(b, outcomes);
+  const missing = missingOutcomes(b, outcomes, now);
   if (missing.length > 0) throw new Error(`Missing outcomes for: ${missing.join(', ')}`);
 
   const { closeSessions, closed } = closeOpenSessions(b, now);
@@ -84,16 +116,23 @@ export function closeByHand(
   const taken = new Map<string, DayTask>();
   for (const d of next.dayTasks) if (d.taskId !== null) taken.set(d.taskId, d);
   let sortOrder = next.dayTasks.reduce((m, d) => Math.max(m, d.sortOrder), -1) + 1;
-  for (const t of untickedChecks(b)) {
+  const maxSec = MINUTES.max * 60;
+  for (const { task: t, leftoverMin } of unfinishedTasks(b, now)) {
     const closeOutcome = outcomes[t.id];
     ops.outcomes.push({ dayTaskId: t.id, closeOutcome });
     if (closeOutcome !== 'moved') continue;
+    // Timed: the leftover (whole minutes, rounded up) travels, capped at the plan maximum.
+    const leftoverSec = Math.min(maxSec, (leftoverMin ?? 0) * 60);
     const existing = t.taskId !== null ? taken.get(t.taskId) : undefined;
     if (existing) {
       if (existing.forwardedFromDayKey === null) {
         // the day note travels; the next-day row keeps its own if it has one (ADR-011)
         const note = existing.note == null && t.note != null ? { note: t.note } : {};
-        ops.forwardDayTasks.push({ dayTaskId: existing.id, forwardedFromDayKey: b.day.dayKey, ...note });
+        const add =
+          t.kind === 'timed' && existing.kind === 'timed'
+            ? { addBudgetSec: Math.max(0, Math.min(leftoverSec, maxSec - existing.budgetSec)) }
+            : {};
+        ops.forwardDayTasks.push({ dayTaskId: existing.id, forwardedFromDayKey: b.day.dayKey, ...note, ...add });
       }
       continue;
     }
@@ -104,7 +143,7 @@ export function closeByHand(
       name: t.name,
       colorKey: t.colorKey,
       kind: t.kind,
-      budgetSec: 0,
+      budgetSec: t.kind === 'timed' ? leftoverSec : 0,
       cue: t.cue,
       treat: t.treat,
       note: t.note,

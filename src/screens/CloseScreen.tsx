@@ -86,10 +86,10 @@ export default function CloseScreen() {
             </>
           ) : (
             <>
-              {s.unticked.length > 0 ? (
+              {s.unfinished.length > 0 ? (
                 <Card>
-                  <T weight="bold">Not ticked today</T>
-                  {s.unticked.map((u) => (
+                  <T weight="bold">Not finished today</T>
+                  {s.unfinished.map((u) => (
                     <View
                       key={u.dayTaskId}
                       testID={missing.includes(u.dayTaskId) ? 'outcome-missing' : undefined}
@@ -102,6 +102,7 @@ export default function CloseScreen() {
                         topicColor={u.colorKey}
                         value={outcomes[u.dayTaskId] ?? null}
                         nextDayName={tomorrowName}
+                        leftoverMin={u.leftoverMin}
                         onChange={(v) => choose(u.dayTaskId, v)}
                       />
                     </View>

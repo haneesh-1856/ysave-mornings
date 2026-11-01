@@ -7,7 +7,7 @@ import { createTask, createTopic, updateTask } from '@/state/actions/library';
 import { reconcile } from '@/state/actions/reconcile';
 import { setClockOverride } from '@/state/clock';
 import { getDb } from '@/state/dbRef';
-import { setupState, teardownState } from '@/state/testSupport';
+import { letGoAll, setupState, teardownState } from '@/state/testSupport';
 import { renderThemed } from '@/ui/testing';
 
 import TodayScreen from '../../app/(tabs)/today';
@@ -67,7 +67,7 @@ async function planTomorrow(extra?: () => void) {
   createTask(study.id, { name: 'Read', kind: 'timed', minutes: 30, repeatMask: 127, isDefault: true });
   extra?.();
   reconcile();
-  closeToday({});
+  closeToday(letGoAll());
   mockParam = TOMORROW;
   const r = await renderThemed(<PlanScreen />);
   await fireEvent.press(screen.getByRole('button', { name: 'Saturday looks like this ✓' }));
@@ -122,7 +122,7 @@ describe('chunk 9: a default changed after tomorrow was confirmed', () => {
     const dId = createTask(study.id, { name: 'D', kind: 'timed', minutes: 15, repeatMask: 127, isDefault: true }).id;
     const nId = createTask(study.id, { name: 'N', kind: 'timed', minutes: 15, repeatMask: 127, isDefault: false }).id;
     reconcile();
-    closeToday({});
+    closeToday(letGoAll());
     mockParam = TOMORROW;
     const r = await renderThemed(<PlanScreen />);
     await fireEvent.press(screen.getByRole('checkbox', { name: 'Include D' }));

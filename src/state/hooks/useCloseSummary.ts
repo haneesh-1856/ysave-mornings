@@ -4,6 +4,7 @@ import { listTopics } from '../../data/repos/topics';
 import { collectionItems } from '../../domain/collection';
 import type { CollectionItem } from '../../domain/collection';
 import { addDays } from '../../domain/dayKey';
+import { unfinishedTasks } from '../../domain/rollover';
 import { focusedMs, overtimeMs } from '../../domain/timer';
 import type { ColorKey, Day, DayKey } from '../../domain/types';
 import { now } from '../clock';
@@ -11,18 +12,20 @@ import { getDb } from '../dbRef';
 import { useDataVersion } from '../store';
 import { todayKey as resolveTodayKey } from '../today';
 
-export interface UntickedRow {
+/** An unticked check, or a timed task with minutes left (then `leftoverMin`, rounded up, is set). */
+export interface UnfinishedRow {
   dayTaskId: string;
   name: string;
   topicName: string;
   colorKey: ColorKey;
+  leftoverMin?: number;
 }
 
 export interface CloseSummary {
   todayKey: DayKey;
   day: Day | null;
   closed: boolean;
-  unticked: UntickedRow[];
+  unfinished: UnfinishedRow[];
   done: number;
   total: number;
   focusedMs: number;
@@ -42,7 +45,7 @@ export function useCloseSummary(): CloseSummary {
     const bundle = loadDayBundle(db, todayKey);
     const base = { todayKey, tomorrowKey };
     if (!bundle) {
-      return { ...base, day: null, closed: false, unticked: [], done: 0, total: 0, focusedMs: 0, extraMs: 0, items: [] };
+      return { ...base, day: null, closed: false, unfinished: [], done: 0, total: 0, focusedMs: 0, extraMs: 0, items: [] };
     }
     const names = new Map(listTopics(db).map((t) => [t.id, t.name]));
     const tasks = [...bundle.dayTasks].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -57,14 +60,13 @@ export function useCloseSummary(): CloseSummary {
       ...base,
       day: bundle.day,
       closed: bundle.day.closedAt !== null,
-      unticked: tasks
-        .filter((t) => t.kind === 'check' && t.completedAt === null)
-        .map((t) => ({
-          dayTaskId: t.id,
-          name: t.name,
-          topicName: names.get(t.topicId) ?? 'Removed topic',
-          colorKey: t.colorKey,
-        })),
+      unfinished: unfinishedTasks(bundle, at).map(({ task: t, leftoverMin }) => ({
+        dayTaskId: t.id,
+        name: t.name,
+        topicName: names.get(t.topicId) ?? 'Removed topic',
+        colorKey: t.colorKey,
+        ...(leftoverMin !== undefined ? { leftoverMin } : {}),
+      })),
       done: tasks.filter((t) => t.completedAt !== null).length,
       total: tasks.length,
       focusedMs: focused,

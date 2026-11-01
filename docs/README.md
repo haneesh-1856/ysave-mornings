@@ -21,7 +21,7 @@ When these docs and the prototype disagree, **the docs win**. Fix the docs first
 ## Ground rules
 
 - **Philosophy is a requirement.** No points, prizes, leaderboards, streak-shaming, plan judging,
-  suggestions, or carry-forward of unfinished time. A feature that breaks this is a bug.
+  suggestions, or automatic carry-forward of unfinished time (moving it is an explicit opt-in at close). A feature that breaks this is a bug.
 - **Local-first.** v1 has no account, no server and no network calls. Everything is on the device.
 - **Domain logic is pure TypeScript** with unit tests. Screens stay thin.
 - **Any rule change updates [04](04-domain-rules.md) in the same commit as the code.**

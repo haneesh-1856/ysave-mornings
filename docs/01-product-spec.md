@@ -58,5 +58,5 @@ daily log (undecided), data export, widgets, custom cue/treat text (v1 uses pres
 
 ## Non-goals (never)
 
-Judging plans, suggesting tasks, carrying unfinished time forward, policing focus, streak-break
+Judging plans, suggesting tasks, automatically carrying unfinished time forward (it is an explicit opt-in at close, ADR-014), policing focus, streak-break
 shaming, points/prizes/leaderboards, reading your meetings calendar.

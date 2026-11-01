@@ -85,6 +85,7 @@ async function walkThePath() {
   // 3. Close today, moving A.
   r = await renderThemed(<CloseScreen />);
   await fireEvent.press(screen.getByRole('radio', { name: 'A: Move to Saturday' }));
+  await fireEvent.press(screen.getByRole('radio', { name: 'Read: Let it go' }));
   await fireEvent.press(screen.getByTestId('close-confirm'));
   expect(screen.getByText('Jar closed')).toBeTruthy();
   await r.unmount();

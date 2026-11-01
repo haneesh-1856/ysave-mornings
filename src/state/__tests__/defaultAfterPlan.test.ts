@@ -10,7 +10,7 @@ import { createTask, createTopic, updateTask } from '../actions/library';
 import { confirmDayPlan, saveDayDraft } from '../actions/plan';
 import { reconcile } from '../actions/reconcile';
 import { setClockOverride } from '../clock';
-import { setupState, teardownState } from '../testSupport';
+import { letGoAll, setupState, teardownState } from '../testSupport';
 
 jest.mock('../ids', () => {
   let n = 0;
@@ -57,7 +57,7 @@ function planTomorrow(): void {
   const study = createTopic({ name: 'Study', colorKey: 'study' });
   createTask(study.id, { name: 'Read', kind: 'timed', minutes: 30, repeatMask: 127, isDefault: true });
   reconcile();
-  closeToday({});
+  closeToday(letGoAll());
   confirmDayPlan(SAT, planOf(SAT));
   later();
 }
@@ -97,7 +97,7 @@ describe('reverse: default turned off after confirmation', () => {
     createTask(study.id, { name: 'Read', kind: 'timed', minutes: 30, repeatMask: 127, isDefault: true });
     const c = createTask(study.id, { name: 'C', kind: 'timed', minutes: 30, repeatMask: 127, isDefault: true });
     reconcile();
-    closeToday({});
+    closeToday(letGoAll());
     confirmDayPlan(SAT, planOf(SAT));
     expect(storedNames(SAT)).toEqual(['C', 'Read']);
     later();
@@ -126,7 +126,7 @@ describe('guards: choices at confirmation and other edits win', () => {
     createTask(study.id, { name: 'Read', kind: 'timed', minutes: 30, repeatMask: 127, isDefault: true });
     createTask(study.id, { name: 'D', kind: 'timed', minutes: 30, repeatMask: 127, isDefault: true });
     reconcile();
-    closeToday({});
+    closeToday(letGoAll());
     confirmDayPlan(SAT, untick(planOf(SAT), 'D'));
     later();
     expect(row(SAT, 'D').ticked).toBe(false);
@@ -137,7 +137,7 @@ describe('guards: choices at confirmation and other edits win', () => {
     createTask(study.id, { name: 'Read', kind: 'timed', minutes: 30, repeatMask: 127, isDefault: true });
     createTask(study.id, { name: 'N', kind: 'timed', minutes: 30, repeatMask: 127, isDefault: false });
     reconcile();
-    closeToday({});
+    closeToday(letGoAll());
     confirmDayPlan(SAT, tick(planOf(SAT), 'N'));
     later();
     expect(row(SAT, 'N').ticked).toBe(true);
@@ -148,7 +148,7 @@ describe('guards: choices at confirmation and other edits win', () => {
     const d = createTask(study.id, { name: 'D', kind: 'timed', minutes: 30, repeatMask: 127, isDefault: true });
     const n = createTask(study.id, { name: 'N', kind: 'timed', minutes: 30, repeatMask: 127, isDefault: false });
     reconcile();
-    closeToday({});
+    closeToday(letGoAll());
     confirmDayPlan(SAT, tick(untick(planOf(SAT), 'D'), 'N'));
     later();
     updateTask(d.id, { name: 'D2', minutes: 45, isDefault: true }); // isDefault unchanged
@@ -210,7 +210,7 @@ describe('re-confirm: the latest confirmation wins over earlier default changes'
     createTask(study.id, { name: 'Read', kind: 'timed', minutes: 30, repeatMask: 127, isDefault: true });
     const c = createTask(study.id, { name: 'C', kind: 'timed', minutes: 30, repeatMask: 127, isDefault: true });
     reconcile();
-    closeToday({});
+    closeToday(letGoAll());
     confirmDayPlan(SAT, planOf(SAT));
     later();
     updateTask(c.id, { isDefault: false });
