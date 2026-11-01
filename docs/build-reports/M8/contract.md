@@ -179,6 +179,7 @@ Rule (ADR-012):
 - Chunk 13: see below.
 - Chunk 14: see below.
 - Chunk 15: see below.
+- Chunk 16: see below.
 
 ## Chunk 13 · Library: new task + topic picker (phone check, user 2026-10-31)
 User: "...in the library there should also be not just add new topic, also add new task."
@@ -211,3 +212,11 @@ Rule (amends chunk 14, ADR-013):
 - Only tasks still in the current list are submitted; a task added meanwhile shows with No topic.
 - `removeTopic(id, { moves: [{ taskId, toTopicId }] })` -> `softDeleteTopic(db, id, now, { moves })`; replaces `moveTaskIds`/`toTopicId`. Tasks not listed are deleted with the topic. One transaction; validated before any write: each target live and not the topic, each taskId a live task of the topic, no duplicate taskId (`ValidationError`, nothing written). Each moved task goes to the end of its target, tasks to the same target keep their old relative order.
 - `TopicPicker` gets an optional `extra: { id, name }` shown last without a color dot (used for "Delete").
+
+## Chunk 16 · Today: no "Today is planned" card (phone check, user 2026-10-31)
+User: "In today's page, we don't need a tab-like structure to say 'Today is planned', See and Edit buttons. That tab is unnecessary and we only need some edit button somewhere in the page."
+Rule (ADR-009 kept):
+- The "Today is planned · N tasks" card with See / Edit is removed from Today.
+- One "Edit" button (testID `today-edit`, accessibilityLabel "Edit today's plan") sits in the Header row, right side, pushing `/plan/<todayKey>`. Shown only when today is planned and open (plannable, not closed).
+- `Header` gets an optional `right?: ReactNode`; other callers unchanged.
+- Unchanged: "Plan today" (unplanned), tomorrow card (See / Edit), "Plan tomorrow", closed card, Close, folds, Dock, Collection. The `/planned/[dayKey]` route stays (Morning's "See today's plan", Plan confirm).

@@ -211,16 +211,22 @@ describe('Today: entry cards', () => {
     expect(mockPush).toHaveBeenCalledWith({ pathname: '/plan/[dayKey]', params: { dayKey: TOMORROW } });
   });
 
-  it("offers See and Edit for an open planned today (ADR-009), no Plan today", async () => {
+  it("has no Today is planned card; one Edit button beside the title opens the plan (ADR-009)", async () => {
     plan(TODAY);
     await renderThemed(<TodayScreen />);
-    expect(screen.getByText('Today is planned · 4 tasks')).toBeTruthy();
+    expect(screen.queryByText(/Today is planned/)).toBeNull();
+    expect(screen.queryByRole('button', { name: "See today's plan" })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Plan today' })).toBeNull();
     expect(screen.queryByText('Nothing planned for today')).toBeNull();
-    await fireEvent.press(screen.getByRole('button', { name: "See today's plan" }));
-    expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/planned/[dayKey]', params: { dayKey: TODAY } });
-    await fireEvent.press(screen.getByRole('button', { name: "Edit today's plan" }));
+    expect(screen.getAllByRole('button', { name: "Edit today's plan" })).toHaveLength(1);
+    await fireEvent.press(screen.getByTestId('today-edit'));
     expect(mockPush).toHaveBeenLastCalledWith({ pathname: '/plan/[dayKey]', params: { dayKey: TODAY } });
+  });
+
+  it('shows no Edit when today is not planned, and still shows Plan today', async () => {
+    await renderThemed(<TodayScreen />);
+    expect(screen.queryByTestId('today-edit')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Plan today' })).toBeTruthy();
   });
 
   it('shows the tomorrow card with See and Edit, and a ghost Plan tomorrow', async () => {
@@ -239,7 +245,7 @@ describe('Today: entry cards', () => {
     await act(async () => {
       plan(TODAY);
     });
-    expect(screen.getByText('Today is planned · 4 tasks')).toBeTruthy();
+    expect(screen.getByTestId('today-edit')).toBeTruthy();
     expect(screen.getByText('0 of 4 done')).toBeTruthy();
   });
 });
@@ -252,7 +258,8 @@ describe('Today: closed day', () => {
     expect(screen.getByText('Today is closed')).toBeTruthy();
     expect(screen.queryByRole('button', { name: "Edit today's plan" })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Plan today' })).toBeNull();
-    expect(screen.getByRole('button', { name: "See today's plan" })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: "See today's plan" })).toBeNull();
+    expect(screen.queryByTestId('today-edit')).toBeNull();
     const timed = screen.getByRole('button', { name: 'Read, 5 minutes, start' });
     const check = screen.getByRole('button', { name: 'Sums, checklist, open' });
     expect(timed).not.toBeDisabled();

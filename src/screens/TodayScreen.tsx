@@ -168,7 +168,16 @@ export default function TodayScreen() {
   return (
     <Screen tabs footer={layout === 'dock' ? <Dock items={items} closed={closed} onClose={showClose ? goClose : undefined} /> : undefined}>
       <Chain links={chain} />
-      <Header title="Today" note={empty ? undefined : `${done} of ${total} done`} />
+      <Header
+        title="Today"
+        note={empty ? undefined : `${done} of ${total} done`}
+        right={
+          // Edit while today is open (ADR-009).
+          canEditToday && todayPlanned ? (
+            <Button testID="today-edit" label="Edit" accessibilityLabel="Edit today's plan" kind="ghost" onPress={() => plan(todayKey)} />
+          ) : null
+        }
+      />
       {closed ? (
         <Card>
           <T weight="bold">Today is closed</T>
@@ -182,18 +191,6 @@ export default function TodayScreen() {
         </View>
       ) : null}
       {canEditToday && !todayPlanned ? <Button testID="today-plan-today" label="Plan today" onPress={() => plan(todayKey)} /> : null}
-      {todayPlanned ? (
-        <Card>
-          <T weight="bold">{`Today is planned · ${tasks(todayPlan.rows.length)}`}</T>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Button label="See" accessibilityLabel="See today's plan" kind="ghost" onPress={() => see(todayKey)} />
-            {/* Edit while today is open (ADR-009). */}
-            {canEditToday ? (
-              <Button label="Edit" accessibilityLabel="Edit today's plan" kind="ghost" onPress={() => plan(todayKey)} />
-            ) : null}
-          </View>
-        </Card>
-      ) : null}
       {tomorrowPlanned ? (
         <Card>
           <T weight="bold">{`Tomorrow is planned · ${tasks(tomorrowPlan.rows.length)}`}</T>
