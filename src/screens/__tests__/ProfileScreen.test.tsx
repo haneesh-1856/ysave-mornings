@@ -4,8 +4,10 @@ import { dayStartOf } from '@/domain/dayKey';
 import { createTask, createTopic } from '@/state/actions/library';
 import { saveLook } from '@/state/actions/look';
 import { reconcile } from '@/state/actions/reconcile';
+import { setMomentsEnabled, setMonthlyGoal } from '@/state/actions/settings';
 import { toggleCheckTask } from '@/state/actions/run';
 import { getDb } from '@/state/dbRef';
+import { getMomentsEnabled } from '@/data/repos/settings';
 import { loadDayBundle } from '@/data/repos/days';
 import { DEFAULT_LOOK } from '@/theme/look';
 import { useLookStore } from '@/theme/ThemeProvider';
@@ -69,6 +71,26 @@ describe('ProfileScreen', () => {
     await renderThemed(<ProfileScreen />);
     expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(2); // 1 day showed up, 1 marble
     expect(screen.getByText('0h')).toBeTruthy(); // a check task adds no focused time
+  });
+
+  it('Monthly goal row shows None or the hours and opens its screen', async () => {
+    await renderThemed(<ProfileScreen />);
+    expect(screen.getByRole('button', { name: 'Monthly goal, None' })).toBeTruthy();
+    await act(async () => setMonthlyGoal(40));
+    await fireEvent.press(screen.getByRole('button', { name: 'Monthly goal, 40 h' }));
+    expect(mockPush).toHaveBeenCalledWith('/settings/monthly-goal');
+    await act(async () => setMonthlyGoal(null));
+    expect(screen.getByRole('button', { name: 'Monthly goal, None' })).toBeTruthy();
+  });
+
+  it('Moments at close switch shows the state and toggles it', async () => {
+    await renderThemed(<ProfileScreen />);
+    expect(screen.getByRole('switch', { name: 'Moments at close' }).props.accessibilityState).toEqual({ checked: true });
+    await fireEvent.press(screen.getByRole('switch', { name: 'Moments at close' }));
+    expect(getMomentsEnabled(getDb())).toBe(false);
+    expect(screen.getByRole('switch', { name: 'Moments at close' }).props.accessibilityState).toEqual({ checked: false });
+    await act(async () => setMomentsEnabled(true));
+    expect(screen.getByRole('switch', { name: 'Moments at close' }).props.accessibilityState).toEqual({ checked: true });
   });
 
   it('Look and Color & glass rows show their values and open their screens', async () => {

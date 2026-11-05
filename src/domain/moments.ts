@@ -1,5 +1,5 @@
 import { collectionItems } from './collection';
-import { addDays, weekStartOf } from './dayKey';
+import { addDays, weekdayIndex, weekStartOf } from './dayKey';
 import { monthKeyOf } from './calendar';
 import { daysShowedUp } from './stats';
 import { focusedMs, isGold } from './timer';
@@ -9,11 +9,21 @@ import type { ColorKey, DayBundle, DayKey, Epoch, MonthKey } from './types';
 
 const MS_PER_HOUR = 3_600_000;
 export const STREAK_STEP = 7;
+/** Steps the stair draws: the last min(days, STREAK_MAX_STEPS) days of the run. */
+export const STREAK_MAX_STEPS = 21;
+/** Days before today the best moment draws as bars. */
+export const BEST_RECENT_DAYS = 13;
 
 export type Moment =
   | { kind: 'longest'; name: string; colorKey: ColorKey; focusedMs: number; budgetSec: number }
   | { kind: 'day'; done: number; total: number; focusedMs: number; closedAt: Epoch }
-  | { kind: 'best'; todayMs: number; previousBestMs: number }
+  | {
+      kind: 'best';
+      todayMs: number;
+      previousBestMs: number;
+      /** Focused ms of the 13 days before today, oldest first (index 12 = yesterday). 0 for a day with no sessions. */
+      recentMs: number[];
+    }
   | { kind: 'streak'; days: number; endDayKey: DayKey }
   | {
       kind: 'week';
@@ -22,6 +32,8 @@ export type Moment =
       focusedMs: number;
       goldRings: number;
       daysShowedUp: number;
+      /** Focused ms of each day Monday..Sunday (index 0 = weekStart). 0 for a day with no row. Sums to focusedMs. */
+      dailyMs: number[];
     }
   | {
       kind: 'month';
@@ -29,6 +41,8 @@ export type Moment =
       monthFocusMs: number;
       goalHours: number | null;
       daysShowedUp: number;
+      /** Focused ms of each day of the month from the 1st to today (index 0 = the 1st). 0 for a day with no row. Sums to monthFocusMs. */
+      dailyMs: number[];
     };
 
 export type MomentKind = Moment['kind'];
@@ -58,8 +72,8 @@ export interface MomentsInput {
   closedAt: Epoch;
   /** The day being closed, loaded AFTER the close was applied. */
   today: DayBundle;
-  /** Focused ms of every earlier day that has any history (zeros allowed). */
-  earlierDayFocusMs: number[];
+  /** Focused ms of every earlier day that has any session, keyed by day (from `focusTotalsByDay`). */
+  earlierFocusByDay: Record<DayKey, number>;
   /**
    * Collection item count per day (the same count `chain` and `daysShowedUp` use) for today and the days before
    * it, going back at least until the first day with 0 (older days may be left out: a missing day counts 0).
@@ -90,6 +104,12 @@ export function streakRun(todayKey: DayKey, itemCountByDay: Record<DayKey, numbe
   return run;
 }
 
+/** Weekday (0 = Monday .. 6 = Sunday, `weekdayIndex`) of each drawn step, oldest first; the last is endDayKey. */
+export function streakWeekdays(m: Extract<Moment, { kind: 'streak' }>): number[] {
+  const n = Math.min(m.days, STREAK_MAX_STEPS);
+  return Array.from({ length: n }, (_, i) => weekdayIndex(addDays(m.endDayKey, i - (n - 1))));
+}
+
 function longest(today: DayBundle, at: Epoch): Moment | null {
   let best: { t: DayBundle['dayTasks'][number]; ms: number } | null = null;
   for (const t of today.dayTasks) {
@@ -117,9 +137,12 @@ export function momentsAtClose(input: MomentsInput): Moment[] {
   const total = today.dayTasks.length;
   if (total > 0 && done === total) out.push({ kind: 'day', done, total, focusedMs: todayMs, closedAt });
 
-  const earlierBest = input.earlierDayFocusMs.reduce((m, v) => Math.max(m, v), 0);
+  const earlierBest = Object.values(input.earlierFocusByDay).reduce((m, v) => Math.max(m, v), 0);
   const previousBestMs = Math.max(earlierBest, markers.bestMs);
-  if (earlierBest > 0 && todayMs > previousBestMs) out.push({ kind: 'best', todayMs, previousBestMs });
+  if (earlierBest > 0 && todayMs > previousBestMs) {
+    const recentMs = Array.from({ length: BEST_RECENT_DAYS }, (_, i) => input.earlierFocusByDay[addDays(todayKey, -BEST_RECENT_DAYS + i)] ?? 0);
+    out.push({ kind: 'best', todayMs, previousBestMs, recentMs });
+  }
 
   const run = streakRun(todayKey, input.itemCountByDay);
   if (run >= STREAK_STEP && run % STREAK_STEP === 0) {
@@ -133,8 +156,14 @@ export function momentsAtClose(input: MomentsInput): Moment[] {
     let tasksDone = 0;
     let goldRings = 0;
     let weekMs = 0;
-    for (const b of input.weekBundles) {
-      weekMs += bundleFocusMs(b, closedAt);
+    const dailyMs = [0, 0, 0, 0, 0, 0, 0];
+    const weekKeys = dailyMs.map((_, i) => addDays(weekStart, i));
+    // Only this week's days count, so the totals always match the seven days drawn.
+    const bundles = input.weekBundles.filter((b) => weekKeys.includes(b.day.dayKey));
+    for (const b of bundles) {
+      const ms = bundleFocusMs(b, closedAt);
+      weekMs += ms;
+      dailyMs[weekKeys.indexOf(b.day.dayKey)] += ms;
       for (const t of b.dayTasks) {
         if (t.completedAt !== null) tasksDone++;
         if (t.kind === 'timed' && isGold(t.budgetSec, b.sessionsByDayTask[t.id] ?? [], closedAt)) goldRings++;
@@ -146,14 +175,21 @@ export function momentsAtClose(input: MomentsInput): Moment[] {
       tasksDone,
       focusedMs: weekMs,
       goldRings,
-      daysShowedUp: daysShowedUp(countsOf(input.weekBundles, closedAt)),
+      daysShowedUp: daysShowedUp(countsOf(bundles, closedAt)),
+      dailyMs,
     });
   }
 
   const monthKey = monthKeyOf(todayKey);
   if (markers.monthCelebrated !== monthKey) {
     const goal = input.monthlyGoalHours;
-    const monthFocusMs = input.monthBundles.reduce((sum, b) => sum + bundleFocusMs(b, closedAt), 0);
+    // Only the month's days up to today count, so the totals always match the days drawn.
+    const dayCount = Number(todayKey.slice(8, 10));
+    const monthKeys = Array.from({ length: dayCount }, (_, i) => `${monthKey}-${String(i + 1).padStart(2, '0')}`);
+    const bundles = input.monthBundles.filter((b) => monthKeys.includes(b.day.dayKey));
+    const dailyMs = monthKeys.map(() => 0);
+    for (const b of bundles) dailyMs[monthKeys.indexOf(b.day.dayKey)] += bundleFocusMs(b, closedAt);
+    const monthFocusMs = dailyMs.reduce((a, v) => a + v, 0);
     const lastDay = monthKeyOf(addDays(todayKey, 1)) !== monthKey;
     const due = goal !== null ? monthFocusMs >= goal * MS_PER_HOUR : lastDay;
     if (due) {
@@ -162,7 +198,8 @@ export function momentsAtClose(input: MomentsInput): Moment[] {
         monthKey,
         monthFocusMs,
         goalHours: goal,
-        daysShowedUp: daysShowedUp(countsOf(input.monthBundles, closedAt)),
+        daysShowedUp: daysShowedUp(countsOf(bundles, closedAt)),
+        dailyMs,
       });
     }
   }

@@ -2,6 +2,9 @@ import { router } from 'expo-router';
 import { View } from 'react-native';
 
 import { useDayStart } from '@/state/hooks/useDayStart';
+import { setMomentsEnabled } from '@/state/actions/settings';
+import { useMomentsEnabled } from '@/state/hooks/useMomentsEnabled';
+import { useMonthlyGoal } from '@/state/hooks/useMonthlyGoal';
 import { useLookFavourites } from '@/state/hooks/useLookFavourites';
 import { useProfileStats } from '@/state/hooks/useProfileStats';
 import { useTheme } from '@/theme/ThemeProvider';
@@ -12,6 +15,7 @@ import { glassValue, lookName } from '@/ui/lookNames';
 import { Screen } from '@/ui/Screen';
 import { SettingRow } from '@/ui/SettingRow';
 import { StatTiles } from '@/ui/StatTiles';
+import { Switch } from '@/ui/Switch';
 import { T } from '@/ui/T';
 
 /** Focused time as hours: whole hours from 10h up ("14h"), one decimal below ("3.5h", "0h" for none). */
@@ -24,6 +28,8 @@ export function ProfileScreen() {
   const t = useTheme();
   const stats = useProfileStats();
   const { hour } = useDayStart();
+  const goal = useMonthlyGoal();
+  const momentsOn = useMomentsEnabled();
   const favourites = useLookFavourites();
   return (
     <Screen tabs>
@@ -43,6 +49,8 @@ export function ProfileScreen() {
       />
       <Card style={{ paddingVertical: 2 }}>
         <SettingRow label="My day starts" value={hourText(hour)} onPress={() => router.push('/settings/day-start')} />
+        <SettingRow label="Monthly goal" value={goal === null ? 'None' : `${goal} h`} onPress={() => router.push('/settings/monthly-goal')} />
+        <Switch label="Moments at close" value={momentsOn} onChange={setMomentsEnabled} />
         <SettingRow label="Look" value={lookName(t.look, favourites)} onPress={() => router.push('/settings/look')} />
         <SettingRow label="Color & glass" value={glassValue(t.look)} onPress={() => router.push('/settings/glass')} />
         <SettingRow label="Sounds" value="Coming later" />
@@ -54,6 +62,9 @@ export function ProfileScreen() {
             value="Dev only, saves nothing"
             onPress={() => router.push({ pathname: '/onboarding', params: { preview: '1' } })}
           />
+        ) : null}
+        {__DEV__ ? (
+          <SettingRow label="Moments lab" value="Dev only: play, switches, crash trail" onPress={() => router.push('/dev/moments-lab')} />
         ) : null}
       </Card>
     </Screen>

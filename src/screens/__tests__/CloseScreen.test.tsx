@@ -1,19 +1,32 @@
-import { act, fireEvent, screen } from '@testing-library/react-native';
+import { act, configure, fireEvent, screen } from '@testing-library/react-native';
 import * as Haptics from 'expo-haptics';
+import { AccessibilityInfo } from 'react-native';
+
 
 import { loadDayBundle } from '@/data/repos/days';
+import { setMomentsEnabled } from '@/data/repos/settings';
 import { dayStartOf } from '@/domain/dayKey';
 import type { PlanDraft, PlanRow } from '@/domain/plan';
 import { createTopic, createTask } from '@/state/actions/library';
 import { confirmDayPlan } from '@/state/actions/plan';
-import { startTask } from '@/state/actions/run';
+import { startTask, toggleCheckTask } from '@/state/actions/run';
+import { setMomentsEnabled as setMomentsOn } from '@/state/actions/settings';
 import { setClockOverride } from '@/state/clock';
 import { getDb } from '@/state/dbRef';
 import { setupState, teardownState } from '@/state/testSupport';
+import { formatClock } from '@/ui/momentText';
 import { renderThemed } from '@/ui/testing';
 
 import CloseScreen from '../CloseScreen';
 
+// The player's drawn text is hidden from screen readers on purpose (announcements carry it), so queries must include hidden elements.
+configure({ defaultIncludeHiddenElements: true });
+
+// Reanimated's JS build drives timings with requestAnimationFrame, which loops forever under jest fake timers: land on the target at once.
+jest.mock('react-native-reanimated', () => {
+  const actual = jest.requireActual('react-native-reanimated');
+  return new Proxy(actual, { get: (target, key) => (key === 'withTiming' ? (to: number) => to : target[key]) });
+});
 let mockN = 0;
 jest.mock('@/state/ids', () => ({ newId: () => `id-${++mockN}` }));
 const mockPush = jest.fn();
@@ -45,6 +58,9 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
+// The moments player renders a large tree; under a full parallel run these tests are slower than jest's 5 s default.
+jest.setTimeout(30_000);
+
 const TODAY = '2026-10-29'; // Thursday
 const TOMORROW = '2026-10-30'; // Friday
 const NOW = dayStartOf(TODAY, 4) + 6 * 3_600_000;
@@ -54,7 +70,7 @@ beforeEach(() => {
   setupState(NOW);
   t = NOW;
   setClockOverride(() => t);
-  for (const m of [mockPush, mockReplace, mockDismissTo, mockLid, Haptics.notificationAsync]) (m as jest.Mock).mockClear();
+  for (const m of [mockPush, mockReplace, mockDismissTo, mockLid, Haptics.notificationAsync, Haptics.impactAsync]) (m as jest.Mock).mockClear();
 });
 afterEach(() => teardownState());
 
@@ -199,5 +215,126 @@ describe('Close screen', () => {
     expect(screen.queryByRole('button', { name: 'Close the jar' })).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Back to Today' }));
     expect(mockDismissTo).toHaveBeenCalledWith('/(tabs)/today');
+  });
+});
+
+describe('Close screen: moments player', () => {
+  const STEP = 2200; // REDUCED_STEP_MS: with Reduce Motion each moment's final frame stays this long
+  let announce: jest.SpyInstance;
+  beforeEach(() => {
+    jest.useFakeTimers({ doNotFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'queueMicrotask', 'nextTick', 'setImmediate', 'clearImmediate'] });
+    announce = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    announce.mockRestore();
+    jest.useRealTimers();
+  });
+
+  /** Read runs past its 5 minutes (so it is done and has the most focus); the checks are ticked: every task done. */
+  function everythingDone() {
+    plan();
+    startTask(idOf('Read'));
+    t += 6 * 60_000;
+    for (const n of ['Notes', 'Essay', 'Sums']) toggleCheckTask(idOf(n));
+  }
+  /** Read runs 2 minutes and stays unfinished: the day closes with tasks left. */
+  async function closeWithTasksLeft() {
+    plan();
+    await renderThemed(<CloseScreen />);
+    await act(async () => {
+      startTask(idOf('Read'));
+    });
+    t += 2 * 60_000;
+    await choose('Read', 'Notes', 'Essay', 'Sums');
+    await fireEvent.press(screen.getByRole('button', { name: 'Close the jar' }));
+    (Haptics.impactAsync as jest.Mock).mockClear(); // the buttons' own press haptics
+  }
+  const advance = (ms: number) => act(() => jest.advanceTimersByTime(ms));
+
+  it('all tasks done: plays Longest task, Day complete, then the finished ending, announcing each', async () => {
+    everythingDone();
+    await renderThemed(<CloseScreen />);
+    expect(screen.queryByTestId('moments-player')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Close the jar' }));
+    (Haptics.impactAsync as jest.Mock).mockClear(); // the button's own press haptic
+
+    expect(screen.getByTestId('moments-player')).toBeTruthy();
+    expect(screen.getByText('LONGEST TASK.')).toBeTruthy();
+    expect(screen.getByText('1 / 2')).toBeTruthy();
+    expect(announce).toHaveBeenLastCalledWith('Longest task: Read, 6 minutes.');
+
+    await advance(STEP);
+    expect(screen.getByText('DAY COMPLETE.')).toBeTruthy();
+    expect(screen.getByText('2 / 2')).toBeTruthy();
+    expect(screen.getByText(`CLOSED ${formatClock(t)}  \u00b7  4 OF 4 DONE`)).toBeTruthy();
+    expect(announce).toHaveBeenLastCalledWith('Day complete: 4 of 4 tasks, 6 minutes focused.');
+    expect(Haptics.impactAsync).not.toHaveBeenCalled();
+
+    await advance(STEP);
+    expect(screen.getByText('YSAVE MORNINGS')).toBeTruthy();
+    expect(screen.getByText('2 MOMENTS \u00b7 DAY FINISHED')).toBeTruthy();
+    expect(screen.getByText('TAP TO CONTINUE')).toBeTruthy();
+    expect(Haptics.impactAsync).toHaveBeenCalledWith('light');
+  });
+
+  it('a task left: Longest only, then the quiet ending, no Day complete and no closing haptic', async () => {
+    await closeWithTasksLeft();
+    expect(screen.getByText('LONGEST TASK.')).toBeTruthy();
+    expect(screen.getByText('1 / 1')).toBeTruthy();
+    await advance(STEP);
+    expect(screen.getByText('DAY CLOSED')).toBeTruthy();
+    expect(screen.getByText('THE DAY CLOSES QUIETLY')).toBeTruthy();
+    expect(screen.queryByText('DAY COMPLETE.')).toBeNull();
+    expect(screen.queryByText('YSAVE MORNINGS')).toBeNull();
+    expect(Haptics.impactAsync).not.toHaveBeenCalled();
+  });
+
+  it('moments off: no player at all, the screen behaves as before', async () => {
+    everythingDone();
+    setMomentsEnabled(getDb(), false, t);
+    await renderThemed(<CloseScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Close the jar' }));
+    expect(screen.queryByTestId('moments-player')).toBeNull();
+    expect(screen.queryByText('LONGEST TASK.')).toBeNull();
+    expect(screen.getByText('Jar closed')).toBeTruthy();
+  });
+
+  it('moments turned off and on again through the action: the close plays the player', async () => {
+    everythingDone();
+    await renderThemed(<CloseScreen />);
+    await act(async () => setMomentsOn(false));
+    await act(async () => setMomentsOn(true));
+    await fireEvent.press(screen.getByRole('button', { name: 'Close the jar' }));
+    expect(screen.getByTestId('moments-player')).toBeTruthy();
+    expect(screen.getByText('LONGEST TASK.')).toBeTruthy();
+  });
+
+  it('no focus today: nothing is due, no player', async () => {
+    plan();
+    await renderThemed(<CloseScreen />);
+    await choose('Read', 'Notes', 'Essay', 'Sums');
+    await fireEvent.press(screen.getByRole('button', { name: 'Close the jar' }));
+    expect(screen.queryByTestId('moments-player')).toBeNull();
+  });
+
+  it('Skip dismisses at any time and leaves the closed state', async () => {
+    everythingDone();
+    await renderThemed(<CloseScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Close the jar' }));
+    expect(screen.getByText('LONGEST TASK.')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Skip' }));
+    expect(screen.queryByTestId('moments-player')).toBeNull();
+    expect(screen.getByText('Jar closed')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Plan tomorrow' })).toBeTruthy();
+    await advance(10 * STEP); // the stage is gone: nothing comes back
+    expect(screen.queryByTestId('moments-player')).toBeNull();
+  });
+
+  it('tapping anywhere (Continue) at the ending dismisses', async () => {
+    await closeWithTasksLeft();
+    await advance(STEP);
+    await fireEvent.press(screen.getByRole('button', { name: 'Continue' }));
+    expect(screen.queryByTestId('moments-player')).toBeNull();
+    expect(screen.getByText('Jar closed')).toBeTruthy();
   });
 });

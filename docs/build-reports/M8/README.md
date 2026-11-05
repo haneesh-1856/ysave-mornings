@@ -28,6 +28,7 @@ Interfaces: contract.md (written before the code chunks).
 | 17 | Today: one tomorrow control (card when planned, else Plan tomorrow) | phone check | [chunk-17](chunk-17-one-tomorrow-control.md) | built, awaiting check |
 | 18 | Close: opt-in carry-forward of unfinished time (timed tasks can be moved) | user request | [chunk-18](chunk-18-timed-carry-forward.md) | built, awaiting check |
 | 19 | Close: moments at close, data and rules (no UI) | user request | [chunk-19](chunk-19-close-moments.md) | built, awaiting check |
+| 20 | Close: the moments player (Longest + Day complete drawn, other four placeholder) | user request | [chunk-20](chunk-20-moments-player.md) | built, awaiting check |
 
 ## Chunk 0 · App icon + splash
 **Choice (user, 2026-10-30):** "The Unfinished Sun", from the user's own reference image: a sun whose ring has one

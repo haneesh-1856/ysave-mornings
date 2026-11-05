@@ -1,3 +1,4 @@
+import { BarlowCondensed_800ExtraBold } from '@expo-google-fonts/barlow-condensed';
 import {
   BricolageGrotesque_400Regular, BricolageGrotesque_500Medium, BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold,
 } from '@expo-google-fonts/bricolage-grotesque';
@@ -23,6 +24,7 @@ export const FONT_ASSETS = {
   Fraunces_400Regular, Fraunces_500Medium, Fraunces_600SemiBold, Fraunces_700Bold, Fraunces_800ExtraBold,
   BricolageGrotesque_400Regular, BricolageGrotesque_500Medium, BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold,
   IBMPlexMono_400Regular, IBMPlexMono_500Medium, IBMPlexMono_600SemiBold, IBMPlexMono_700Bold,
+  BarlowCondensed_800ExtraBold,
 };
 
 export type Weight = 'regular' | 'medium' | 'semibold' | 'bold' | 'extrabold';
@@ -41,3 +43,6 @@ export const FONT_SETS: Record<LookMix['font'], FontSet> = {
   bricolage: set('BricolageGrotesque'),
   plex: set('IBMPlexMono', '700Bold'), // Plex Mono has no 800
 };
+
+/** The close moments player has its own fixed look (not themed): condensed display headlines and bold mono telemetry. */
+export const MOMENT_FONTS = { display: 'BarlowCondensed_800ExtraBold', mono: 'IBMPlexMono_700Bold' } as const;

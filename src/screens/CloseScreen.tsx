@@ -3,8 +3,10 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 
+import type { Moment } from '@/domain/moments';
 import type { CloseOutcome } from '@/domain/types';
 import { closeToday, MissingOutcomesError } from '@/state/actions/close';
+import { saveLastClose } from '@/state/devLab';
 import { ValidationError } from '@/state/errors';
 import { useCloseSummary } from '@/state/hooks/useCloseSummary';
 import { useSubmitGuard } from '@/state/hooks/useSubmitGuard';
@@ -16,6 +18,7 @@ import { Collection } from '@/ui/collection/Collection';
 import { collectionNoun } from '@/ui/collectionNoun';
 import { weekdayName } from '@/ui/dayNames';
 import { Header } from '@/ui/Header';
+import { MomentsPlayer } from '@/ui/moments/MomentsPlayer';
 import { OutcomePicker } from '@/ui/OutcomePicker';
 import { Screen } from '@/ui/Screen';
 import { T } from '@/ui/T';
@@ -32,6 +35,8 @@ export default function CloseScreen() {
   const [missing, setMissing] = useState<string[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [justClosed, setJustClosed] = useState(false);
+  // The moments to play after a close by hand; cleared when the player is dismissed. Empty: no player at all.
+  const [moments, setMoments] = useState<Moment[]>([]);
 
   const tomorrowName = weekdayName(s.tomorrowKey);
   const planTomorrow = () => router.replace({ pathname: '/plan/[dayKey]', params: { dayKey: s.tomorrowKey } });
@@ -44,11 +49,10 @@ export default function CloseScreen() {
 
   const close = () => {
     try {
-      const ok = guard.run(() => {
-        closeToday(outcomes);
-        return true;
-      });
-      if (ok) {
+      const played = guard.run(() => closeToday(outcomes));
+      if (played) {
+        setMoments(played);
+        if (__DEV__) saveLastClose(played, s.timedFocus); // Moments lab: replay without closing another day
         // The data bump flips `closed` while the jar stays mounted, so the lid swings.
         setJustClosed(true);
         setMessage(null);
@@ -68,6 +72,7 @@ export default function CloseScreen() {
 
   return (
     <Screen>
+      {moments.length > 0 ? <MomentsPlayer moments={moments} bars={s.timedFocus} onDone={() => setMoments([])} /> : null}
       <Header title="Close today" />
       <View style={{ alignItems: 'center' }}>{jar}</View>
       {nothing ? (

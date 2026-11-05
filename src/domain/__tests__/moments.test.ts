@@ -1,5 +1,5 @@
-import { addDays } from '../dayKey';
-import { DEFAULT_MARKERS, momentsAtClose, nextMarkers, streakRun } from '../moments';
+import { addDays, weekdayIndex } from '../dayKey';
+import { DEFAULT_MARKERS, STREAK_MAX_STEPS, momentsAtClose, nextMarkers, streakRun, streakWeekdays } from '../moments';
 import type { Moment, MomentMarkers, MomentsInput } from '../moments';
 import type { DayBundle, DayKey, DayTask, Session } from '../types';
 
@@ -28,7 +28,7 @@ function bundle(dayKey: DayKey, tasks: DayTask[], sessions: Record<string, numbe
 function input(over: Partial<MomentsInput> = {}): MomentsInput {
   const today = over.today ?? bundle('2026-10-29', [task('A', { completedAt: 1 })], { A: 10 * MIN });
   return {
-    closedAt: CLOSED, today, earlierDayFocusMs: [], itemCountByDay: { [today.day.dayKey]: 2 },
+    closedAt: CLOSED, today, earlierFocusByDay: {}, itemCountByDay: { [today.day.dayKey]: 2 },
     weekBundles: [today], monthBundles: [today], monthlyGoalHours: null, markers: DEFAULT_MARKERS, ...over,
   };
 }
@@ -71,21 +71,49 @@ describe('day', () => {
   });
 });
 
+// Earlier days keyed from yesterday back: E(a, b) = { 10-28: a, 10-27: b }.
+const E = (...ms: number[]): Record<DayKey, number> => Object.fromEntries(ms.map((v, i) => [addDays('2026-10-29', -1 - i), v]));
+
 describe('best', () => {
   const today = bundle('2026-10-29', [task('A')], { A: 60 * MIN });
   it('never on the very first day (no earlier focus)', () => {
-    expect(find(momentsAtClose(input({ today, earlierDayFocusMs: [] })), 'best')).toBeUndefined();
-    expect(find(momentsAtClose(input({ today, earlierDayFocusMs: [0, 0] })), 'best')).toBeUndefined();
+    expect(find(momentsAtClose(input({ today, earlierFocusByDay: {} })), 'best')).toBeUndefined();
+    expect(find(momentsAtClose(input({ today, earlierFocusByDay: E(0, 0) })), 'best')).toBeUndefined();
   });
   it('beating the best by 1 ms fires; equal does not', () => {
-    expect(find(momentsAtClose(input({ today, earlierDayFocusMs: [60 * MIN - 1, 5] })), 'best')).toEqual({ kind: 'best', todayMs: 60 * MIN, previousBestMs: 60 * MIN - 1 });
-    expect(find(momentsAtClose(input({ today, earlierDayFocusMs: [60 * MIN] })), 'best')).toBeUndefined();
+    expect(find(momentsAtClose(input({ today, earlierFocusByDay: E(60 * MIN - 1, 5) })), 'best')).toEqual({ kind: 'best', todayMs: 60 * MIN, previousBestMs: 60 * MIN - 1, recentMs: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 60 * MIN - 1] });
+    expect(find(momentsAtClose(input({ today, earlierFocusByDay: E(60 * MIN) })), 'best')).toBeUndefined();
   });
   it('must also beat the stored marker', () => {
     const markers = { ...DEFAULT_MARKERS, bestMs: 90 * MIN };
-    expect(find(momentsAtClose(input({ today, earlierDayFocusMs: [10 * MIN], markers })), 'best')).toBeUndefined();
+    expect(find(momentsAtClose(input({ today, earlierFocusByDay: E(10 * MIN), markers })), 'best')).toBeUndefined();
     const m2 = { ...DEFAULT_MARKERS, bestMs: 30 * MIN };
-    expect(find(momentsAtClose(input({ today, earlierDayFocusMs: [10 * MIN], markers: m2 })), 'best')!.previousBestMs).toBe(30 * MIN);
+    expect(find(momentsAtClose(input({ today, earlierFocusByDay: E(10 * MIN), markers: m2 })), 'best')!.previousBestMs).toBe(30 * MIN);
+  });
+  type Best = Extract<Moment, { kind: 'best' }>;
+  const bestOf = (over: Partial<MomentsInput>) => find(momentsAtClose(input({ today, ...over })), 'best') as Best;
+  it('recentMs is 13 entries, oldest first, index 12 = yesterday, missing days 0', () => {
+    // Today 10-29. Yesterday 10-28 = 7, 10-26 = 9 (index 10), 10-16 = 4 (index 0, the oldest shown), 10-15 = 20 (outside).
+    const b = bestOf({ earlierFocusByDay: { '2026-10-28': 7, '2026-10-26': 9, '2026-10-16': 4, '2026-10-15': 20 } });
+    expect(b.recentMs).toHaveLength(13);
+    expect(b.recentMs).toEqual([4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 0, 7]);
+    expect(b.previousBestMs).toBe(20);
+  });
+  it('every recentMs value is <= previousBestMs, whether the best is a recent day, a marker or older than 13 days', () => {
+    const cases: Partial<MomentsInput>[] = [
+      { earlierFocusByDay: E(10 * MIN, 59 * MIN, 3) },
+      { earlierFocusByDay: E(10 * MIN, 5 * MIN), markers: { ...DEFAULT_MARKERS, bestMs: 40 * MIN } },
+      { earlierFocusByDay: { '2026-10-28': 10 * MIN, '2026-09-01': 50 * MIN } },
+    ];
+    for (const c of cases) {
+      const b = bestOf(c);
+      expect(b.recentMs).toHaveLength(13);
+      for (const v of b.recentMs) expect(v).toBeLessThanOrEqual(b.previousBestMs);
+    }
+    expect(bestOf(cases[1]).previousBestMs).toBe(40 * MIN);
+    // The marker (40) sets the glass only; the bars stay the real days (10-28 = 10, 10-27 = 5), never clamped up to 40.
+    expect(bestOf(cases[1]).recentMs).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5 * MIN, 10 * MIN]);
+    expect(bestOf(cases[2]).previousBestMs).toBe(50 * MIN);
   });
 });
 
@@ -127,6 +155,33 @@ describe('week', () => {
   it('fires on the last day with the week totals', () => {
     expect(wk(sunB)).toEqual({
       kind: 'week', weekStart: mon, tasksDone: 3, focusedMs: 42 * MIN, goldRings: 1, daysShowedUp: 2,
+      dailyMs: [30 * MIN, 0, 0, 0, 0, 0, 12 * MIN],
+    });
+  });
+  describe('dailyMs', () => {
+    const tue = bundle('2026-10-27', [task('T')], { T: 7 * MIN });
+    const thu = bundle('2026-10-29', [task('H')], { H: 5 * MIN });
+    const weekOf = (bundles: DayBundle[]) =>
+      find(momentsAtClose(input({ today: sunB, weekBundles: bundles })), 'week')!;
+    it('has 7 entries, Monday first, 0 for a day with no row', () => {
+      const w = weekOf([monB, tue, thu, sunB]);
+      expect(w.dailyMs).toHaveLength(7);
+      expect(w.dailyMs).toEqual([30 * MIN, 7 * MIN, 0, 5 * MIN, 0, 0, 12 * MIN]);
+    });
+    it('ignores a day outside the week in every total', () => {
+      const lastSun = bundle('2026-10-25', [task('X', { completedAt: 1 })], { X: 50 * MIN });
+      const w = weekOf([lastSun, monB, tue, thu, sunB]);
+      expect(w).toEqual(weekOf([monB, tue, thu, sunB]));
+    });
+    it('sums to focusedMs', () => {
+      const w = weekOf([monB, tue, thu, sunB]);
+      expect(w.dailyMs.reduce((a, b) => a + b, 0)).toBe(w.focusedMs);
+    });
+    it('does not depend on the order of the bundles', () => {
+      expect(weekOf([sunB, thu, monB, tue]).dailyMs).toEqual(weekOf([monB, tue, thu, sunB]).dailyMs);
+    });
+    it('is all zeros when no bundles are given', () => {
+      expect(weekOf([]).dailyMs).toEqual([0, 0, 0, 0, 0, 0, 0]);
     });
   });
   it('does not fire on another day', () => {
@@ -143,8 +198,10 @@ describe('month', () => {
   const m = (goal: number | null, bundles: DayBundle[], markers: MomentMarkers = DEFAULT_MARKERS) =>
     find(momentsAtClose(input({ today: bundles[bundles.length - 1], monthBundles: bundles, weekBundles: [], monthlyGoalHours: goal, markers })), 'month');
   it('goal reached fires with the month data', () => {
+    // Closed on the 20th: dailyMs has 20 entries, 60 min at idx 9 (the 10th) and idx 19 (the 20th).
+    const dailyMs = Array.from({ length: 20 }, (_, i) => (i === 9 || i === 19 ? H : 0));
     expect(m(2, [day('2026-10-10', 60 * MIN), day('2026-10-20', 60 * MIN)])).toEqual({
-      kind: 'month', monthKey: '2026-10', monthFocusMs: 2 * H, goalHours: 2, daysShowedUp: 2,
+      kind: 'month', monthKey: '2026-10', monthFocusMs: 2 * H, goalHours: 2, daysShowedUp: 2, dailyMs,
     });
   });
   it('goal not reached does not fire, even on the last day', () => {
@@ -157,10 +214,29 @@ describe('month', () => {
   });
   it('no goal: month in review on the last day only, with goalHours null', () => {
     expect(m(null, [day('2026-10-30', 10 * MIN)])).toBeUndefined();
+    const dailyMs = Array.from({ length: 31 }, (_, i) => (i === 9 || i === 30 ? 10 * MIN : 0));
     expect(m(null, [day('2026-10-10', 10 * MIN), day('2026-10-31', 10 * MIN)])).toEqual({
-      kind: 'month', monthKey: '2026-10', monthFocusMs: 20 * MIN, goalHours: null, daysShowedUp: 2,
+      kind: 'month', monthKey: '2026-10', monthFocusMs: 20 * MIN, goalHours: null, daysShowedUp: 2, dailyMs,
     });
     expect(m(null, [day('2026-10-31', 10 * MIN)], { ...DEFAULT_MARKERS, monthCelebrated: '2026-10' })).toBeUndefined();
+  });
+  it('dailyMs: length is the day of the month today is, in order from the 1st, missing days 0, sums to monthFocusMs', () => {
+    const r = m(1, [day('2026-10-03', 40 * MIN), day('2026-10-01', 30 * MIN), day('2026-10-06', 20 * MIN)])!;
+    // Bundles may come in any order; today (the last one given) is the 6th.
+    expect(r.dailyMs).toEqual([30 * MIN, 0, 40 * MIN, 0, 0, 20 * MIN]);
+    expect(r.monthFocusMs).toBe(90 * MIN);
+    expect(r.dailyMs.reduce((a, v) => a + v, 0)).toBe(r.monthFocusMs);
+  });
+  it('the last day of February has 28 entries in 2027 and 29 in the leap year 2028', () => {
+    expect(m(null, [day('2027-02-28', 10 * MIN)])!.dailyMs).toEqual([...Array(27).fill(0), 10 * MIN]);
+    expect(m(null, [day('2028-02-29', 10 * MIN)])!.dailyMs).toEqual([...Array(28).fill(0), 10 * MIN]);
+    expect(m(null, [day('2028-02-29', 10 * MIN)])!.dailyMs).toHaveLength(29);
+  });
+  it('a bundle from another month (or after today) is ignored in the total, the days and the count', () => {
+    const r = m(1, [day('2026-09-30', 5 * H), day('2026-10-02', 30 * MIN), day('2026-11-01', 5 * H), day('2026-10-04', 40 * MIN)])!;
+    expect(r.dailyMs).toEqual([0, 30 * MIN, 0, 40 * MIN]);
+    expect(r.monthFocusMs).toBe(70 * MIN);
+    expect(r.daysShowedUp).toBe(2);
   });
 });
 
@@ -168,7 +244,7 @@ describe('order and markers', () => {
   it('plays in order longest, day, best, streak, week, month', () => {
     const sun = bundle('2026-11-01', [task('A', { completedAt: 1 })], { A: 2 * H });
     const ms = momentsAtClose(input({
-      today: sun, earlierDayFocusMs: [H], itemCountByDay: counts('2026-11-01', 7),
+      today: sun, earlierFocusByDay: { '2026-10-31': H }, itemCountByDay: counts('2026-11-01', 7),
       weekBundles: [sun], monthBundles: [sun], monthlyGoalHours: 1,
     }));
     expect(kinds(ms)).toEqual(['longest', 'day', 'best', 'streak', 'week', 'month']);
@@ -177,14 +253,52 @@ describe('order and markers', () => {
   it('nextMarkers records what played and leaves the rest', () => {
     const ms: Moment[] = [
       { kind: 'day', done: 1, total: 1, focusedMs: 1, closedAt: 1 },
-      { kind: 'best', todayMs: 5000, previousBestMs: 10 },
+      { kind: 'best', todayMs: 5000, previousBestMs: 10, recentMs: [] },
       { kind: 'streak', days: 14, endDayKey: '2026-10-29' },
-      { kind: 'week', weekStart: '2026-10-26', tasksDone: 0, focusedMs: 0, goldRings: 0, daysShowedUp: 0 },
-      { kind: 'month', monthKey: '2026-10', monthFocusMs: 0, goalHours: null, daysShowedUp: 0 },
+      { kind: 'week', weekStart: '2026-10-26', tasksDone: 0, focusedMs: 0, goldRings: 0, daysShowedUp: 0, dailyMs: [0, 0, 0, 0, 0, 0, 0] },
+      { kind: 'month', monthKey: '2026-10', monthFocusMs: 0, goalHours: null, daysShowedUp: 0, dailyMs: [0] },
     ];
     expect(nextMarkers(DEFAULT_MARKERS, ms)).toEqual({
       bestMs: 5000, streakCelebrated: 14, streakEndDayKey: '2026-10-29', weekCelebrated: '2026-10-26', monthCelebrated: '2026-10',
     });
     expect(nextMarkers(DEFAULT_MARKERS, [ms[0]])).toBe(DEFAULT_MARKERS);
+  });
+});
+
+describe('streakWeekdays', () => {
+  const streak = (days: number, endDayKey: DayKey): Extract<Moment, { kind: 'streak' }> => ({ kind: 'streak', days, endDayKey });
+  // 2026-10-29 is a Thursday (3). Weekday 0 = Monday.
+  it('7 days ending Thursday: Friday..Thursday', () => {
+    expect(streakWeekdays(streak(7, '2026-10-29'))).toEqual([4, 5, 6, 0, 1, 2, 3]);
+  });
+  it('14 days is two turns of the week, still ending Thursday', () => {
+    expect(streakWeekdays(streak(14, '2026-10-29'))).toEqual([4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3]);
+  });
+  it('21 days is three turns', () => {
+    const w = streakWeekdays(streak(21, '2026-10-29'));
+    expect(w).toHaveLength(21);
+    const first7 = [4, 5, 6, 0, 1, 2, 3];
+    expect(w).toEqual([...first7, ...first7, ...first7]);
+  });
+  it('28 days is capped at 21 steps and still ends on endDayKey', () => {
+    const w = streakWeekdays(streak(28, '2026-10-29'));
+    expect(STREAK_MAX_STEPS).toBe(21);
+    expect(w).toHaveLength(21);
+    expect(w[20]).toBe(3);
+    // The stair shows the LAST 21 days: the first step is the weekday of endDayKey - 20 (Friday, not Thursday).
+    expect(w[0]).toBe(weekdayIndex(addDays('2026-10-29', -20)));
+    expect(w[0]).toBe(4);
+  });
+  it('0 days draws nothing, 1 day is just endDayKey', () => {
+    expect(streakWeekdays(streak(0, '2026-10-29'))).toEqual([]);
+    expect(streakWeekdays(streak(1, '2026-10-29'))).toEqual([weekdayIndex('2026-10-29')]);
+  });
+  it('ends on the weekday of endDayKey for each weekday, stepping +1 mod 7', () => {
+    for (let wd = 0; wd < 7; wd++) {
+      const end = addDays('2026-10-26', wd); // Monday 2026-10-26 + wd
+      const w = streakWeekdays(streak(14, end));
+      expect(w[w.length - 1]).toBe(wd);
+      for (let i = 1; i < w.length; i++) expect(w[i]).toBe((w[i - 1] + 1) % 7);
+    }
   });
 });

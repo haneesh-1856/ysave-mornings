@@ -1,6 +1,6 @@
 import { ValidationError } from '../../data/errors';
 import { setFutureDayStartHour } from '../../data/repos/days';
-import { setDayStartHour } from '../../data/repos/settings';
+import { setDayStartHour, setMomentsEnabled as saveMomentsEnabled, setMonthlyGoalHours } from '../../data/repos/settings';
 import { now } from '../clock';
 import { getDb } from '../dbRef';
 import { bump } from '../store';
@@ -22,4 +22,25 @@ export function setDayStart(hour: number): void {
   setDayStartHour(db, hour, at);
   setFutureDayStartHour(db, todayKey(db, at), hour, at);
   bump('settings', 'days');
+}
+
+/**
+ * Sets the monthly focus goal in whole hours (1-744), or clears it with null. Only the setting changes: moment
+ * markers are untouched, so a month already celebrated is neither replayed nor reset.
+ */
+export function setMonthlyGoal(hours: number | null): void {
+  if (hours !== null && (!Number.isInteger(hours) || hours < 1 || hours > 744)) {
+    throw new ValidationError('monthlyGoalHours', 'Choose a whole number of hours from 1 to 744');
+  }
+  setMonthlyGoalHours(getDb(), hours, now());
+  bump('settings');
+}
+
+/**
+ * Turns the moments at close on or off. Only the setting changes: moment markers are untouched, so what was already
+ * celebrated stays celebrated, and a goal reached while off can still play at the next close once moments are back on.
+ */
+export function setMomentsEnabled(on: boolean): void {
+  saveMomentsEnabled(getDb(), on, now());
+  bump('settings');
 }

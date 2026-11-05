@@ -32,6 +32,8 @@ export interface CloseSummary {
   extraMs: number;
   items: CollectionItem[];
   tomorrowKey: DayKey;
+  /** Today's timed tasks that have focus, most focus first (ties by plan order): the bars of the Longest moment. */
+  timedFocus: { name: string; focusedMs: number }[];
 }
 
 /** Everything the Close screen shows about today. Re-reads on days/sessions/topics/tasks/settings changes. */
@@ -45,15 +47,18 @@ export function useCloseSummary(): CloseSummary {
     const bundle = loadDayBundle(db, todayKey);
     const base = { todayKey, tomorrowKey };
     if (!bundle) {
-      return { ...base, day: null, closed: false, unfinished: [], done: 0, total: 0, focusedMs: 0, extraMs: 0, items: [] };
+      return { ...base, day: null, closed: false, unfinished: [], done: 0, total: 0, focusedMs: 0, extraMs: 0, items: [], timedFocus: [] };
     }
     const names = new Map(listTopics(db).map((t) => [t.id, t.name]));
     const tasks = [...bundle.dayTasks].sort((a, b) => a.sortOrder - b.sortOrder);
     let focused = 0;
     let extra = 0;
+    const timedFocus: { name: string; focusedMs: number }[] = [];
     for (const t of tasks) {
       const sessions = bundle.sessionsByDayTask[t.id] ?? [];
-      focused += focusedMs(sessions, at);
+      const ms = focusedMs(sessions, at);
+      focused += ms;
+      if (t.kind === 'timed' && ms > 0) timedFocus.push({ name: t.name, focusedMs: ms });
       if (t.kind === 'timed') extra += overtimeMs(t.budgetSec, sessions, at);
     }
     return {
@@ -72,6 +77,7 @@ export function useCloseSummary(): CloseSummary {
       focusedMs: focused,
       extraMs: extra,
       items: collectionItems(bundle, at),
+      timedFocus: timedFocus.sort((a, b) => b.focusedMs - a.focusedMs), // stable: ties keep plan order
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- version is the invalidation key
   }, [db, version]);

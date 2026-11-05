@@ -60,7 +60,8 @@ describe('closeToday moments', () => {
     work(D2, 20);
     const second = closeToday(letGoAll());
     expect(kinds(second)).toEqual(['longest', 'best']);
-    expect(second[1]).toEqual({ kind: 'best', todayMs: 20 * MIN, previousBestMs: 10 * MIN });
+    // D1 is the day before D2 (today), so its 10 min sit at the last index (12 = yesterday).
+    expect(second[1]).toEqual({ kind: 'best', todayMs: 20 * MIN, previousBestMs: 10 * MIN, recentMs: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10 * MIN] });
     expect(getMomentMarkers(db).bestMs).toBe(20 * MIN);
 
     t = at(D3);
@@ -82,7 +83,7 @@ describe('closeToday moments', () => {
     reconcile();
     work(D2, 30);
     const ms = closeToday(letGoAll());
-    expect(ms.at(-1)).toEqual({ kind: 'month', monthKey: '2026-10', monthFocusMs: 60 * MIN, goalHours: 1, daysShowedUp: 2 });
+    expect(ms.at(-1)).toEqual({ kind: 'month', monthKey: '2026-10', monthFocusMs: 60 * MIN, goalHours: 1, daysShowedUp: 2, dailyMs: [...Array(28).fill(0), 30 * MIN, 30 * MIN] });
     expect(getMomentMarkers(db).monthCelebrated).toBe('2026-10');
 
     t = at(D3);

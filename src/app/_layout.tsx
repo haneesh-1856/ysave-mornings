@@ -10,10 +10,12 @@ import { db, migrations } from '@/data/db';
 import { useMorningRedirect } from '@/screens/useMorningRedirect';
 import { loadLook } from '@/state/actions/look';
 import { setDb } from '@/state/dbRef';
+import { readLabFlags, recordStep } from '@/state/devLab';
 import { useDayBoundary } from '@/state/hooks/useDayBoundary';
 import { useReconcileOnForeground } from '@/state/hooks/useReconcileOnForeground';
 import { FONT_ASSETS } from '@/theme/fonts';
 import { ThemeProvider, useTheme } from '@/theme/ThemeProvider';
+import { setLabFlags, setLabSink } from '@/ui/moments/lab';
 import { Screen } from '@/ui/Screen';
 import { T } from '@/ui/T';
 
@@ -62,6 +64,11 @@ export default function RootLayout() {
   // The splash stays up until the saved look is in the store, so no frame shows the default look.
   if (migrated && !lookLoaded) {
     loadLook();
+    if (__DEV__) {
+      // Moments lab: the close moments' crash trail goes to the phone's storage; the lab switches are restored.
+      setLabSink(recordStep);
+      setLabFlags(readLabFlags() as Parameters<typeof setLabFlags>[0]);
+    }
     setLookLoaded(true);
   }
   const ready = fontsReady && (migrationError ? true : lookLoaded);

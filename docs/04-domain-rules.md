@@ -45,7 +45,8 @@ Rows, grouped by topic in library order:
 - Which day you can plan: **tomorrow** always. **Today** while it's open (not closed), including after its plan
   was confirmed: re-confirming keeps every row that has sessions or `completedAt`, and `planConfirmedAt` keeps its
   first value. Never a past day. *(Changed 2026-10-29, ADR-009; before, today was plannable only until confirmed.)*
-- **Draftable days (ADR-010).** Any day after tomorrow, up to a year ahead, can hold a *draft plan*: the same rows,
+
+- **Draftable days (ADR-010).** Any day after tomorrow, up to a year ahead, can hold a *draft plan*: the same rows,
   saved without `planConfirmedAt` (the day stores `planDraftedAt`). A draft is not a plan: no planning marble, the
   day never counts as planned, and glow, chain and stats ignore it. Once the day is tomorrow, confirming it
   finalizes the plan as usual. A draft day that arrives as today unfinalized is not topped up with defaults (§3):
@@ -164,7 +165,7 @@ Short full-screen moments after a close **by hand** (auto-close plays none). All
 2. **Day complete**: a by-hand close where every task of the day is done (an empty day has nothing to complete). Done / total tasks, the day's focused time, the close time. A close with tasks left plays no Day complete: it ends quietly, like the Moments off ending, with the sun's ring left open.
 3. **Personal best**: today's focused total is greater than every earlier day's total and than the stored best, and at least one earlier day had focus (the first day is never a record). Then the stored best becomes today's total.
 4. **7-day streak**: the run of consecutive days ending today reaches a multiple of 7. A day counts when it has at least one collection item (section 9 chain, section 10 days showed up); today must count. A run length is celebrated once (the marker keeps the length and the end day; a new run after a gap can celebrate again).
-5. **Week complete**: closing the last day of the Monday-Sunday week (section 1 `weekStartOf` + 6). Tasks done, focused time, gold rings (`isGold`), days showed up, week start. Once per week.
+5. **Week complete**: closing the last day of the Monday-Sunday week (section 1 `weekStartOf` + 6). Tasks done, focused time, each day's focus (Monday to Sunday), gold rings (`isGold`), days showed up, week start. Once per week.
 6. **Monthly goal**: setting `monthlyGoalHours` (1-744 or none). With a goal: at the first close where the month's focused total reaches it. Without: a "month in review" when closing the last day of the month. Once per month.
 
-Settings: `monthlyGoalHours` (default none), `momentsEnabled` (default on; off returns no moments and leaves markers alone), `momentMarkers` (what has been celebrated).
+Settings: `monthlyGoalHours` (default none), `momentsEnabled` (default on; off returns no moments and leaves markers alone; something reached while off, such as the monthly goal, can play at the next close after moments are turned back on), `momentMarkers` (what has been celebrated).

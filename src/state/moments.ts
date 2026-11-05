@@ -20,7 +20,8 @@ function bundlesBetween(from: DayKey, to: DayKey): DayBundle[] {
 }
 
 /**
- * Moments for the day just closed by hand at `at` (call AFTER the close is applied). Empty when the user turned
+ * Moments for the day just closed by hand at `at` (call AFTER the close is applied, and after `reconcile` has closed
+ * every past day, so no earlier session is still open and counted up to `at`). Empty when the user turned
  * moments off, leaving markers alone. Otherwise saves the updated markers and returns the moments in play order.
  */
 export function computeMomentsAfterClose(todayKey: DayKey, at: Epoch): Moment[] {
@@ -43,7 +44,7 @@ export function computeMomentsAfterClose(todayKey: DayKey, at: Epoch): Moment[] 
   const moments = momentsAtClose({
     closedAt: at,
     today,
-    earlierDayFocusMs: Object.values(earlier),
+    earlierFocusByDay: earlier,
     itemCountByDay,
     weekBundles: bundlesBetween(weekStartOf(todayKey), todayKey),
     monthBundles: bundlesBetween(`${monthKeyOf(todayKey)}-01`, todayKey),

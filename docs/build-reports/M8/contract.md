@@ -245,3 +245,13 @@ Rule:
 - longest: timed task with the most focus > 0, tie to earlier sortOrder. day: always. best: beats all earlier days and the stored best, needs an earlier day with focus. streak: run ending today (days with >= 1 collection item) is a multiple of 7, once per run length. week: last day (Sunday) of the Monday-Sunday week, once per week. month: with `monthlyGoalHours` at the first close reaching it, without it on the month's last day; once per month.
 - Settings: `monthlyGoalHours` (1-744 or null), `momentsEnabled` (default true), `momentMarkers`. No new tables.
 - Auto-close: no moments, markers untouched.
+
+## Chunk 20 · Close: the moments player (user 2026-11-01)
+User approved the "Through the sun" look (drafts/celebrations/close-moments-v1.html). This chunk plays the moments `closeToday` returns, after a close by hand.
+Rule:
+- Moments empty (nothing due, or moments off): no player; the Close screen is as before. Otherwise a full-screen overlay (fixed graphite look, any theme): ring draws and rays extend (intro 1.4 s), fly through the ring, each moment 3.6 s with a yellow wipe between, pull back (outro 2.4 s).
+- Ending: a `day` moment present (every task done) -> the ring's 85 degree opening closes, a pulse ring, a light haptic, "YSAVE MORNINGS" and "N MOMENTS · DAY FINISHED". No `day` (tasks left) -> quiet ending: sun at 50%, ring left open, "DAY CLOSED" and "THE DAY CLOSES QUIETLY". Then "TAP TO CONTINUE".
+- A tap anywhere, or the "Skip" button (top right, any time), dismisses; the Close screen shows its closed state.
+- Drawn in full: `longest` ("LONGEST TASK.", bars of today's timed tasks by focus, up to 3, the winner in yellow) and `day` ("DAY COMPLETE.", rolling done/total and focus H:MM, one segment per task). `best`, `streak`, `week`, `month` show a plain placeholder card (PERSONAL BEST. / n-DAY STREAK. / WEEK COMPLETE. / MONTHLY GOAL.) until chunk 21.
+- Reduce Motion: no fly through or rolls; each moment's final frame fades in for 2.2 s, then the ending.
+- Screen readers hear a sentence per moment ("Longest task: Study, 1 hour 5 minutes.") and one for the ending.
