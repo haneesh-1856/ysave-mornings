@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { ValidationError } from '../errors';
-import { createTopic, getTopic, listUserTopics, softDeleteTopic, updateTopic } from '../repos/topics';
+import { createTopic, getTopic, listTopics, listUserTopics, softDeleteTopic, updateTopic } from '../repos/topics';
 import { createTask, getTask, listTasks } from '../repos/tasks';
 import { createTestDb } from './testDb';
 
@@ -64,5 +64,16 @@ describe('topics repo', () => {
     // deleting again keeps the original timestamp
     softDeleteTopic(db, t1.id, 900);
     expect(getTopic(db, t1.id)?.deletedAt).toBe(500);
+  });
+
+  it('listTopics hides deleted topics unless includeDeleted is set', () => {
+    const { db, newId } = setup();
+    const a = createTopic(db, { name: 'Study', colorKey: 'study' }, 1, newId);
+    const b = createTopic(db, { name: 'Health', colorKey: 'health' }, 1, newId);
+    softDeleteTopic(db, a.id, 500);
+    expect(listTopics(db).map((t) => t.id)).not.toContain(a.id);
+    expect(listTopics(db).map((t) => t.id)).toContain(b.id);
+    expect(listTopics(db, { includeDeleted: true }).map((t) => t.id)).toEqual(expect.arrayContaining([a.id, b.id]));
+    expect(listTopics(db, { includeDeleted: true }).find((t) => t.id === a.id)?.deletedAt).toBe(500);
   });
 });

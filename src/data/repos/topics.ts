@@ -21,9 +21,13 @@ function validColor(colorKey: ColorKey): ColorKey {
   return colorKey;
 }
 
-/** Topics that are not deleted, in sortOrder; includes the built-in No topic (last). Grouping and names use this. */
-export function listTopics(db: DB): Topic[] {
-  return db.select().from(topics).where(isNull(topics.deletedAt)).orderBy(asc(topics.sortOrder)).all().map(toTopic);
+/**
+ * Topics that are not deleted, in sortOrder; includes the built-in No topic (last). Grouping and names use this.
+ * `includeDeleted` also returns deleted topics (history, e.g. Insights, still names them).
+ */
+export function listTopics(db: DB, opts?: { includeDeleted?: boolean }): Topic[] {
+  const q = db.select().from(topics);
+  return (opts?.includeDeleted ? q : q.where(isNull(topics.deletedAt))).orderBy(asc(topics.sortOrder)).all().map(toTopic);
 }
 
 /** The topics the user made: listTopics without the built-in No topic. Management screens and the empty-library checks use this. */

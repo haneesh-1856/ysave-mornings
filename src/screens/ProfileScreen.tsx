@@ -50,6 +50,7 @@ export function ProfileScreen() {
       <Card style={{ paddingVertical: 2 }}>
         <SettingRow label="My day starts" value={hourText(hour)} onPress={() => router.push('/settings/day-start')} />
         <SettingRow label="Monthly goal" value={goal === null ? 'None' : `${goal} h`} onPress={() => router.push('/settings/monthly-goal')} />
+        <SettingRow label="Insights" value="Last 30 days" onPress={() => router.push('/insights')} />
         <Switch label="Moments at close" value={momentsOn} onChange={setMomentsEnabled} />
         <SettingRow label="Look" value={lookName(t.look, favourites)} onPress={() => router.push('/settings/look')} />
         <SettingRow label="Color & glass" value={glassValue(t.look)} onPress={() => router.push('/settings/glass')} />

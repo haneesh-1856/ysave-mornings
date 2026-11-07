@@ -83,6 +83,12 @@ describe('ProfileScreen', () => {
     expect(screen.getByRole('button', { name: 'Monthly goal, None' })).toBeTruthy();
   });
 
+  it('Insights row shows Last 30 days and opens its screen', async () => {
+    await renderThemed(<ProfileScreen />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Insights, Last 30 days' }));
+    expect(mockPush).toHaveBeenCalledWith('/insights');
+  });
+
   it('Moments at close switch shows the state and toggles it', async () => {
     await renderThemed(<ProfileScreen />);
     expect(screen.getByRole('switch', { name: 'Moments at close' }).props.accessibilityState).toEqual({ checked: true });
